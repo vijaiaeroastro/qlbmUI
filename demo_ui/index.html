@@ -1,0 +1,490 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>qlbmUI Local Helper Demo</title>
+    <style>
+      :root {
+        --bg: #f4efe7;
+        --panel: #fffaf2;
+        --ink: #1d2a33;
+        --muted: #61717c;
+        --accent: #0d8b8b;
+        --accent-2: #e18335;
+        --line: #d9cfbf;
+        --good: #218739;
+        --bad: #b5402b;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        color: var(--ink);
+        background:
+          radial-gradient(circle at top left, #fbe0c3 0, transparent 28%),
+          radial-gradient(circle at top right, #d7efe8 0, transparent 24%),
+          linear-gradient(180deg, #f7f2ea 0%, #efe7db 100%);
+      }
+
+      .page {
+        max-width: 1200px;
+        margin: 0 auto;
+        padding: 32px 20px 48px;
+      }
+
+      .hero {
+        margin-bottom: 24px;
+      }
+
+      .hero h1 {
+        margin: 0 0 10px;
+        font-size: clamp(2rem, 5vw, 4rem);
+        line-height: 0.95;
+        letter-spacing: -0.03em;
+      }
+
+      .hero p {
+        max-width: 760px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 1.05rem;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 18px;
+      }
+
+      .panel {
+        background: color-mix(in srgb, var(--panel) 92%, white);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 14px 50px rgba(50, 40, 25, 0.08);
+      }
+
+      .panel h2 {
+        margin: 0 0 12px;
+        font-size: 1.25rem;
+      }
+
+      .actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        font: inherit;
+        cursor: pointer;
+        background: var(--accent);
+        color: white;
+      }
+
+      button.secondary {
+        background: var(--accent-2);
+      }
+
+      button.ghost {
+        background: transparent;
+        color: var(--ink);
+        border: 1px solid var(--line);
+      }
+
+      label,
+      .label {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      textarea,
+      input {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: white;
+        padding: 12px 14px;
+        font: 14px/1.45 "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      }
+
+      textarea {
+        min-height: 220px;
+        resize: vertical;
+      }
+
+      .stack > * + * {
+        margin-top: 14px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(13, 139, 139, 0.12);
+        color: var(--ink);
+      }
+
+      .status[data-kind="completed"] {
+        background: rgba(33, 135, 57, 0.12);
+        color: var(--good);
+      }
+
+      .status[data-kind="failed"] {
+        background: rgba(181, 64, 43, 0.12);
+        color: var(--bad);
+      }
+
+      pre {
+        margin: 0;
+        padding: 14px;
+        border-radius: 14px;
+        overflow: auto;
+        background: #19242d;
+        color: #edf5f6;
+        min-height: 100px;
+      }
+
+      ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+
+      .two-col {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .hint {
+        color: var(--muted);
+        font-size: 0.95rem;
+      }
+
+      @media (max-width: 900px) {
+        .grid,
+        .two-col {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <h1>qlbmUI Local Helper Demo</h1>
+        <p>
+          This page talks to the localhost helper, submits a generated Python script,
+          polls run status, and lists produced artifacts. It is only a harness for
+          testing the orchestration flow.
+        </p>
+      </section>
+
+      <section class="grid">
+        <div class="panel stack">
+          <div>
+            <h2>Connection</h2>
+            <label for="baseUrl">Helper URL</label>
+            <input id="baseUrl" value="http://127.0.0.1:8712" />
+          </div>
+
+          <div>
+            <label for="pythonExecutable">Python Executable</label>
+            <input
+              id="pythonExecutable"
+              value=""
+              placeholder="Optional. Defaults to the helper's Python interpreter."
+            />
+          </div>
+
+          <div class="actions">
+            <button id="healthBtn">Check Health</button>
+            <button id="qlbmBtn" class="secondary">Load Real qlbm Run</button>
+            <button id="sampleBtn" class="ghost">Load Dummy Script</button>
+            <button id="submitBtn">Submit Run</button>
+            <button id="pollBtn" class="ghost">Poll Current Run</button>
+          </div>
+
+          <div class="hint">
+            `Load Real qlbm Run` submits a small collisionless scenario that writes real `.vti` output.
+            `Load Dummy Script` keeps the fast placeholder flow for debugging the helper only.
+          </div>
+
+          <div>
+            <label for="script">Generated Script</label>
+            <textarea id="script"></textarea>
+          </div>
+
+          <div>
+            <label for="caseJson">Case JSON</label>
+            <textarea id="caseJson">{
+  "name": "demo-case",
+  "mode": "local-helper-test"
+}</textarea>
+          </div>
+        </div>
+
+        <div class="stack">
+          <div class="panel stack">
+            <h2>Run Status</h2>
+            <div id="runStatus" class="status" data-kind="idle">No run yet</div>
+            <div class="two-col">
+              <div>
+                <div class="label">Run ID</div>
+                <div id="runId" class="hint">-</div>
+              </div>
+              <div>
+                <div class="label">Return Code</div>
+                <div id="returnCode" class="hint">-</div>
+              </div>
+            </div>
+            <div>
+              <div class="label">Status JSON</div>
+              <pre id="statusJson">{}</pre>
+            </div>
+          </div>
+
+          <div class="panel stack">
+            <h2>Logs</h2>
+            <div>
+              <div class="label">stdout</div>
+              <pre id="stdout"></pre>
+            </div>
+            <div>
+              <div class="label">stderr</div>
+              <pre id="stderr"></pre>
+            </div>
+          </div>
+
+          <div class="panel stack">
+            <h2>Artifacts</h2>
+            <ul id="artifacts"></ul>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <script>
+      const els = {
+        baseUrl: document.getElementById("baseUrl"),
+        pythonExecutable: document.getElementById("pythonExecutable"),
+        script: document.getElementById("script"),
+        caseJson: document.getElementById("caseJson"),
+        runStatus: document.getElementById("runStatus"),
+        runId: document.getElementById("runId"),
+        returnCode: document.getElementById("returnCode"),
+        statusJson: document.getElementById("statusJson"),
+        stdout: document.getElementById("stdout"),
+        stderr: document.getElementById("stderr"),
+        artifacts: document.getElementById("artifacts"),
+      };
+
+      let currentRunId = null;
+
+      function helperUrl(path) {
+        return `${els.baseUrl.value.replace(/\/$/, "")}${path}`;
+      }
+
+      function setStatus(text, kind = "idle") {
+        els.runStatus.textContent = text;
+        els.runStatus.dataset.kind = kind;
+      }
+
+      function sampleScript() {
+        return `from pathlib import Path
+import json
+import os
+import time
+
+output_dir = Path(os.environ["QLBM_OUTPUT_DIR"])
+paraview_dir = output_dir / "paraview"
+paraview_dir.mkdir(parents=True, exist_ok=True)
+
+(output_dir / "lattice.json").write_text(json.dumps({
+    "lattice": {"dim": {"x": 8, "y": 8}, "velocities": "d2q9"},
+    "geometry": []
+}, indent=2), encoding="utf-8")
+
+(paraview_dir / "shape_0.stl").write_text("solid demo\\nendsolid demo\\n", encoding="utf-8")
+
+for step in range(3):
+    time.sleep(1)
+    (paraview_dir / f"step_{step:03d}.vti").write_text(
+        f"<VTKFile type=\\"ImageData\\"><ImageData WholeExtent=\\"0 1 0 1 0 0\\"><!-- step {step} --></ImageData></VTKFile>",
+        encoding="utf-8",
+    )
+    print(f"generated step {step}", flush=True)
+
+print("done", flush=True)
+`;
+      }
+
+      function qlbmScript() {
+        return `from pathlib import Path
+import os
+
+from qiskit_aer import AerSimulator
+from qlbm.components import CQLBM, CollisionlessInitialConditions, GridMeasurement, EmptyPrimitive
+from qlbm.infra import QiskitRunner, SimulationConfig
+from qlbm.lattice import CollisionlessLattice
+from qlbm.tools.utils import create_directory_and_parents
+
+output_dir = Path(os.environ["QLBM_OUTPUT_DIR"])
+create_directory_and_parents(str(output_dir))
+
+lattice = CollisionlessLattice(
+    {
+        "lattice": {"dim": {"x": 8, "y": 8}, "velocities": {"x": 4, "y": 4}},
+        "geometry": [],
+    }
+)
+
+cfg = SimulationConfig(
+    initial_conditions=CollisionlessInitialConditions(lattice),
+    algorithm=CQLBM(lattice),
+    postprocessing=EmptyPrimitive(lattice),
+    measurement=GridMeasurement(lattice),
+    target_platform="QISKIT",
+    compiler_platform="QISKIT",
+    optimization_level=0,
+    statevector_sampling=True,
+    execution_backend=AerSimulator(method="statevector"),
+    sampling_backend=AerSimulator(method="statevector"),
+)
+
+cfg.prepare_for_simulation()
+runner = QiskitRunner(cfg, lattice)
+runner.run(1, 2**8, str(output_dir), statevector_snapshots=True)
+print("qlbm collisionless run completed", output_dir, flush=True)
+`;
+      }
+
+      async function checkHealth() {
+        const response = await fetch(helperUrl("/health"));
+        const data = await response.json();
+        setStatus(data.ok ? "Helper reachable" : "Helper unreachable", data.ok ? "completed" : "failed");
+        els.statusJson.textContent = JSON.stringify(data, null, 2);
+      }
+
+      async function submitRun() {
+        let caseData = null;
+        try {
+          caseData = JSON.parse(els.caseJson.value);
+        } catch (error) {
+          setStatus("Invalid case JSON", "failed");
+          els.stderr.textContent = String(error);
+          return;
+        }
+
+        const response = await fetch(helperUrl("/runs"), {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            script: els.script.value,
+            case: caseData,
+            filename: "run.py",
+            python_executable: els.pythonExecutable.value || undefined,
+          }),
+        });
+
+        const data = await response.json();
+        if (!response.ok) {
+          setStatus("Run submission failed", "failed");
+          els.statusJson.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        currentRunId = data.run_id;
+        setStatus(`Submitted ${currentRunId}`, "running");
+        renderRun(data);
+        pollRun();
+      }
+
+      async function pollRun() {
+        if (!currentRunId) {
+          setStatus("No current run", "failed");
+          return;
+        }
+
+        const response = await fetch(helperUrl(`/runs/${currentRunId}`));
+        const data = await response.json();
+        if (!response.ok) {
+          setStatus("Run fetch failed", "failed");
+          els.statusJson.textContent = JSON.stringify(data, null, 2);
+          return;
+        }
+
+        renderRun(data);
+        await loadArtifacts();
+
+        if (data.status === "running" || data.status === "queued") {
+          window.setTimeout(pollRun, 1000);
+        }
+      }
+
+      async function loadArtifacts() {
+        if (!currentRunId) {
+          return;
+        }
+        const response = await fetch(helperUrl(`/runs/${currentRunId}/artifacts`));
+        const data = await response.json();
+        if (!response.ok) {
+          return;
+        }
+
+        els.artifacts.innerHTML = "";
+        for (const artifact of data.artifacts) {
+          const li = document.createElement("li");
+          const link = document.createElement("a");
+          link.href = helperUrl(`/runs/${currentRunId}/file?path=${encodeURIComponent(artifact.path)}`);
+          link.textContent = `${artifact.path} (${artifact.size} bytes)`;
+          link.target = "_blank";
+          li.appendChild(link);
+          els.artifacts.appendChild(li);
+        }
+      }
+
+      function renderRun(data) {
+        currentRunId = data.run_id;
+        els.runId.textContent = data.run_id || "-";
+        els.returnCode.textContent = data.returncode ?? "-";
+        els.stdout.textContent = data.stdout_tail || "";
+        els.stderr.textContent = data.stderr_tail || "";
+        els.statusJson.textContent = JSON.stringify(data, null, 2);
+
+        const kind =
+          data.status === "completed"
+            ? "completed"
+            : data.status === "failed"
+              ? "failed"
+              : "running";
+        setStatus(`Run ${data.status}`, kind);
+      }
+
+      document.getElementById("healthBtn").addEventListener("click", checkHealth);
+      document.getElementById("sampleBtn").addEventListener("click", () => {
+        els.script.value = sampleScript();
+      });
+      document.getElementById("qlbmBtn").addEventListener("click", () => {
+        els.script.value = qlbmScript();
+      });
+      document.getElementById("submitBtn").addEventListener("click", submitRun);
+      document.getElementById("pollBtn").addEventListener("click", pollRun);
+
+      els.script.value = qlbmScript();
+    </script>
+  </body>
+</html>

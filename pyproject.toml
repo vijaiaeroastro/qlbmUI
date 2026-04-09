@@ -1,0 +1,19 @@
+[project]
+name = "qlbm-ui-local-helper"
+version = "0.1.0"
+description = "Local orchestration helper for the qlbm browser UI"
+requires-python = ">=3.11"
+dependencies = ["qlbm"]
+
+[project.scripts]
+qlbm-local-helper = "qlbm_ui_local_helper.server:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
+
+[tool.setuptools.packages.find]
+where = ["src"]
