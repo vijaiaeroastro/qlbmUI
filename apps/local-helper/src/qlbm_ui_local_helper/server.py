@@ -8,7 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from .run_manager import RunManager
+from .run_manager import RunManager, connection_code
 
 
 def _json_bytes(payload: dict) -> bytes:
@@ -23,7 +23,14 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
         path = parsed.path
 
         if path == "/health":
-            self._send_json(HTTPStatus.OK, {"ok": True, "service": "qlbm-local-helper"})
+            self._send_json(
+                HTTPStatus.OK,
+                {"ok": True, "service": "qlbm-local-helper", "runs_dir": str(self.manager.runs_root)},
+            )
+            return
+
+        if path == "/runs":
+            self._send_json(HTTPStatus.OK, self.manager.list_runs())
             return
 
         if path.startswith("/runs/") and path.endswith("/artifacts"):
@@ -79,6 +86,25 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
 
     def do_POST(self) -> None:  # noqa: N802
         parsed = urlparse(self.path)
+        if parsed.path == "/runs/delete":
+            content_length = int(self.headers.get("Content-Length", "0"))
+            raw_body = self.rfile.read(content_length) if content_length else b"{}"
+
+            try:
+                payload = json.loads(raw_body.decode("utf-8"))
+            except json.JSONDecodeError:
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Invalid JSON"})
+                return
+
+            run_ids = payload.get("run_ids")
+            if not isinstance(run_ids, list) or not all(isinstance(item, str) for item in run_ids):
+                self._send_json(HTTPStatus.BAD_REQUEST, {"error": "Expected 'run_ids' as a list of strings"})
+                return
+
+            result = self.manager.delete_runs(run_ids)
+            self._send_json(HTTPStatus.OK, result)
+            return
+
         if parsed.path != "/runs":
             self._send_json(HTTPStatus.NOT_FOUND, {"error": "Unknown endpoint"})
             return
@@ -109,6 +135,26 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
         )
         self._send_json(HTTPStatus.CREATED, run)
 
+    def do_DELETE(self) -> None:  # noqa: N802
+        parsed = urlparse(self.path)
+        path = parsed.path
+
+        if path == "/runs":
+            self._send_json(HTTPStatus.OK, self.manager.delete_all_runs())
+            return
+
+        if path.startswith("/runs/"):
+            run_id = path.strip("/").split("/")[1]
+            try:
+                payload = self.manager.delete_run(run_id)
+            except KeyError:
+                self._send_json(HTTPStatus.NOT_FOUND, {"error": "Run not found"})
+                return
+            self._send_json(HTTPStatus.OK, payload)
+            return
+
+        self._send_json(HTTPStatus.NOT_FOUND, {"error": "Unknown endpoint"})
+
     def do_OPTIONS(self) -> None:  # noqa: N802
         self.send_response(HTTPStatus.NO_CONTENT)
         self._set_cors_headers()
@@ -128,7 +174,7 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
 
     def _set_cors_headers(self) -> None:
         self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
         self.send_header("Access-Control-Allow-Headers", "Content-Type")
 
 
@@ -144,8 +190,13 @@ def main() -> None:
     LocalHelperHandler.manager = manager
 
     server = ThreadingHTTPServer((args.host, args.port), LocalHelperHandler)
-    print(f"qlbm local helper listening on http://{args.host}:{args.port}")
+    address = f"http://{args.host}:{args.port}"
+    code = connection_code(address)
+    print(f"qlbm local helper listening on {address}")
     print(f"runs directory: {runs_root}")
+    print()
+    print("connection code:")
+    print(code)
     server.serve_forever()
 
 

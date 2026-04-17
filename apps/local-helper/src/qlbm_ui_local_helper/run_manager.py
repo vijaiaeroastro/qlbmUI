@@ -2,11 +2,13 @@ from __future__ import annotations
 
 import json
 import os
+import shutil
 import subprocess
 import sys
 import threading
 import time
 import uuid
+from base64 import urlsafe_b64encode
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -31,6 +33,7 @@ class RunManager:
         self.runs_root.mkdir(parents=True, exist_ok=True)
         self._runs: dict[str, RunRecord] = {}
         self._lock = threading.Lock()
+        self._load_existing_runs()
 
     def create_run(
         self,
@@ -104,6 +107,49 @@ class RunManager:
         data["stdout_tail"] = self._tail(record.stdout_path)
         data["stderr_tail"] = self._tail(record.stderr_path)
         return data
+
+    def list_runs(self) -> dict[str, Any]:
+        with self._lock:
+            run_ids = sorted(self._runs.keys(), reverse=True)
+        runs = [self.get_run(run_id) for run_id in run_ids]
+        runs.sort(key=lambda run: run.get("created_at", 0), reverse=True)
+        return {"runs": runs}
+
+    def delete_run(self, run_id: str) -> dict[str, Any]:
+        record = self._get_record(run_id)
+
+        status = self._safe_read_status(record)
+        if status.get("status") == "running":
+            process = record.process
+            if process is not None and process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=3)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=3)
+
+        shutil.rmtree(record.root_dir, ignore_errors=True)
+        with self._lock:
+            self._runs.pop(run_id, None)
+        return {"deleted": [run_id]}
+
+    def delete_runs(self, run_ids: list[str]) -> dict[str, Any]:
+        deleted: list[str] = []
+        missing: list[str] = []
+        for run_id in run_ids:
+            try:
+                self.delete_run(run_id)
+                deleted.append(run_id)
+            except KeyError:
+                missing.append(run_id)
+        return {"deleted": deleted, "missing": missing}
+
+    def delete_all_runs(self) -> dict[str, Any]:
+        with self._lock:
+            run_ids = list(self._runs.keys())
+        result = self.delete_runs(run_ids)
+        return result
 
     def list_artifacts(self, run_id: str) -> dict[str, Any]:
         record = self._get_record(run_id)
@@ -184,8 +230,51 @@ class RunManager:
                 raise KeyError(run_id)
             return self._runs[run_id]
 
+    def _load_existing_runs(self) -> None:
+        for root_dir in sorted(self.runs_root.iterdir()):
+            if not root_dir.is_dir():
+                continue
+
+            status_path = root_dir / "status.json"
+            if not status_path.exists():
+                continue
+
+            work_dir = root_dir / "workspace"
+            script_candidates = sorted(work_dir.glob("*.py")) if work_dir.exists() else []
+            script_path = script_candidates[0] if script_candidates else work_dir / "run.py"
+            stdout_path = root_dir / "stdout.log"
+            stderr_path = root_dir / "stderr.log"
+
+            status = json.loads(status_path.read_text(encoding="utf-8"))
+            run_id = status.get("run_id", root_dir.name)
+            record = RunRecord(
+                run_id=run_id,
+                root_dir=root_dir,
+                work_dir=work_dir,
+                script_path=script_path,
+                stdout_path=stdout_path,
+                stderr_path=stderr_path,
+                status_path=status_path,
+                created_at=float(status.get("created_at", root_dir.stat().st_mtime)),
+            )
+
+            if status.get("status") == "running":
+                status["status"] = "failed"
+                status["returncode"] = status.get("returncode", -1)
+                status["recovered"] = True
+                status["recovery_reason"] = "helper restarted while run was in progress"
+                status["finished_at"] = time.time()
+                status_path.write_text(json.dumps(status, indent=2), encoding="utf-8")
+
+            self._runs[run_id] = record
+
     def _read_status(self, record: RunRecord) -> dict[str, Any]:
         return json.loads(record.status_path.read_text(encoding="utf-8"))
+
+    def _safe_read_status(self, record: RunRecord) -> dict[str, Any]:
+        if not record.status_path.exists():
+            return {"run_id": record.run_id, "status": "unknown"}
+        return self._read_status(record)
 
     def _write_status(self, record: RunRecord, payload: dict[str, Any]) -> None:
         record.status_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
@@ -195,3 +284,7 @@ class RunManager:
             return ""
         data = path.read_text(encoding="utf-8", errors="replace")
         return data[-max_chars:]
+
+
+def connection_code(address: str) -> str:
+    return urlsafe_b64encode(address.encode("utf-8")).decode("ascii")
