@@ -89,8 +89,14 @@ class RunManager:
                 "work_dir": str(work_dir),
                 "output_dir": str(output_dir),
                 "script_path": str(script_path),
+                "progress": self._progress_payload(
+                    stage="queued",
+                    message="Run queued in local helper.",
+                    percent=8,
+                ),
             },
         )
+        self._log(f"queued run {run_id} ({script_path.name})")
 
         worker = threading.Thread(
             target=self._execute_run,
@@ -188,32 +194,76 @@ class RunManager:
         env["QLBM_RUN_DIR"] = str(record.root_dir)
         env["QLBM_OUTPUT_DIR"] = str(record.root_dir / "output")
 
+        self._write_status(
+            record,
+            {
+                **self._read_status(record),
+                "status": "queued",
+                "progress": self._progress_payload(
+                    stage="launching",
+                    message=f"Launching Python process with {Path(python_executable).name}.",
+                    percent=22,
+                ),
+            },
+        )
+        self._log(f"launching run {record.run_id} with {python_executable}")
+
         with record.stdout_path.open("w", encoding="utf-8") as stdout_fp, record.stderr_path.open(
             "w", encoding="utf-8"
         ) as stderr_fp:
-            process = subprocess.Popen(
-                [python_executable, str(record.script_path)],
-                cwd=record.work_dir,
-                stdout=stdout_fp,
-                stderr=stderr_fp,
-                text=True,
-                env=env,
-            )
-            record.process = process
+            try:
+                process = subprocess.Popen(
+                    [python_executable, str(record.script_path)],
+                    cwd=record.work_dir,
+                    stdout=stdout_fp,
+                    stderr=stderr_fp,
+                    text=True,
+                    env=env,
+                )
+                record.process = process
 
-            self._write_status(
-                record,
-                {
-                    **self._read_status(record),
-                    "status": "running",
-                    "pid": process.pid,
-                    "started_at": time.time(),
-                },
-            )
+                self._write_status(
+                    record,
+                    {
+                        **self._read_status(record),
+                        "status": "running",
+                        "pid": process.pid,
+                        "started_at": time.time(),
+                        "progress": self._progress_payload(
+                            stage="running",
+                            message="Simulation process is running.",
+                            percent=58,
+                        ),
+                    },
+                )
+                self._log(f"run {record.run_id} started (pid {process.pid})")
 
-            returncode = process.wait()
+                returncode = process.wait()
+            except Exception as exc:
+                self._write_status(
+                    record,
+                    {
+                        **self._read_status(record),
+                        "status": "failed",
+                        "returncode": -1,
+                        "error": str(exc),
+                        "finished_at": time.time(),
+                        "progress": self._progress_payload(
+                            stage="failed",
+                            message=f"Failed to launch run: {exc}",
+                            percent=100,
+                        ),
+                    },
+                )
+                self._log(f"run {record.run_id} failed before start: {exc}")
+                return
 
         final_status = "completed" if returncode == 0 else "failed"
+        final_message = (
+            "Run completed successfully."
+            if returncode == 0
+            else f"Run exited with return code {returncode}."
+        )
         self._write_status(
             record,
             {
@@ -221,8 +271,17 @@ class RunManager:
                 "status": final_status,
                 "returncode": returncode,
                 "finished_at": time.time(),
+                "progress": self._progress_payload(
+                    stage=final_status,
+                    message=final_message,
+                    percent=100,
+                ),
             },
         )
+        if final_status == "completed":
+            self._log(f"run {record.run_id} completed successfully")
+        else:
+            self._log(f"run {record.run_id} failed with return code {returncode}")
 
     def _get_record(self, run_id: str) -> RunRecord:
         with self._lock:
@@ -264,26 +323,74 @@ class RunManager:
                 status["recovered"] = True
                 status["recovery_reason"] = "helper restarted while run was in progress"
                 status["finished_at"] = time.time()
+                status["progress"] = self._progress_payload(
+                    stage="failed",
+                    message="Helper restarted while the run was still in progress.",
+                    percent=100,
+                )
                 status_path.write_text(json.dumps(status, indent=2), encoding="utf-8")
 
             self._runs[run_id] = record
 
     def _read_status(self, record: RunRecord) -> dict[str, Any]:
-        return json.loads(record.status_path.read_text(encoding="utf-8"))
+        return self._ensure_progress(json.loads(record.status_path.read_text(encoding="utf-8")))
 
     def _safe_read_status(self, record: RunRecord) -> dict[str, Any]:
         if not record.status_path.exists():
-            return {"run_id": record.run_id, "status": "unknown"}
+            return self._ensure_progress({"run_id": record.run_id, "status": "unknown"})
         return self._read_status(record)
 
     def _write_status(self, record: RunRecord, payload: dict[str, Any]) -> None:
-        record.status_path.write_text(json.dumps(payload, indent=2), encoding="utf-8")
+        record.status_path.write_text(
+            json.dumps(self._ensure_progress(payload), indent=2), encoding="utf-8"
+        )
 
     def _tail(self, path: Path, max_chars: int = 4000) -> str:
         if not path.exists():
             return ""
         data = path.read_text(encoding="utf-8", errors="replace")
         return data[-max_chars:]
+
+    def _ensure_progress(self, payload: dict[str, Any]) -> dict[str, Any]:
+        if isinstance(payload.get("progress"), dict):
+            return payload
+
+        return {
+            **payload,
+            "progress": self._progress_payload(
+                stage=str(payload.get("status", "unknown")),
+                message=self._default_progress_message(str(payload.get("status", "unknown"))),
+                percent=self._default_progress_percent(str(payload.get("status", "unknown"))),
+            ),
+        }
+
+    def _progress_payload(self, stage: str, message: str, percent: int) -> dict[str, Any]:
+        return {
+            "stage": stage,
+            "message": message,
+            "percent": max(0, min(100, int(percent))),
+        }
+
+    def _default_progress_message(self, status: str) -> str:
+        messages = {
+            "queued": "Run queued in local helper.",
+            "running": "Simulation process is running.",
+            "completed": "Run completed successfully.",
+            "failed": "Run failed.",
+        }
+        return messages.get(status, "Run state unknown.")
+
+    def _default_progress_percent(self, status: str) -> int:
+        percents = {
+            "queued": 8,
+            "running": 58,
+            "completed": 100,
+            "failed": 100,
+        }
+        return percents.get(status, 0)
+
+    def _log(self, message: str) -> None:
+        print(f"[qlbm-local-helper] {message}", flush=True)
 
 
 def connection_code(address: str) -> str:

@@ -1,38 +1,71 @@
+function clamp(value, minimum, maximum) {
+  return Math.min(Math.max(value, minimum), maximum);
+}
+
+function latticeDimensionBlock(caseData) {
+  if (caseData.dimension === "3D") {
+    return `"dim": {"x": ${Number(caseData.grid.x) || 8}, "y": ${Number(caseData.grid.y) || 8}, "z": ${Number(caseData.grid.z) || 8}}`;
+  }
+
+  return `"dim": {"x": ${Number(caseData.grid.x) || 8}, "y": ${Number(caseData.grid.y) || 8}}`;
+}
+
+function latticeVelocityBlock(caseData) {
+  if (caseData.dimension === "3D") {
+    return `"velocities": {"x": 4, "y": 4, "z": 4}`;
+  }
+
+  return `"velocities": {"x": 4, "y": 4}`;
+}
+
+function cuboidGeometryLine(item, caseData) {
+  const side = Math.max(1, Math.round(item.size.width ?? item.size.height ?? item.size.depth ?? 1));
+  const cx = Number(item.position.x) || 0;
+  const cy = Number(item.position.y) || 0;
+  const cz = Number(item.position.z) || 0;
+  const xDim = Math.max(2, Number(caseData.grid.x) || 8);
+  const yDim = Math.max(2, Number(caseData.grid.y) || 8);
+  const zDim = Math.max(2, Number(caseData.grid.z) || 8);
+  const x0 = clamp(Math.round(cx - side / 2), 0, xDim - 1);
+  const y0 = clamp(Math.round(cy - side / 2), 0, yDim - 1);
+  const x1 = clamp(x0 + side, x0 + 1, xDim);
+  const y1 = clamp(y0 + side, y0 + 1, yDim);
+
+  if (caseData.dimension === "3D") {
+    const z0 = clamp(Math.round(cz - side / 2), 0, zDim - 1);
+    const z1 = clamp(z0 + side, z0 + 1, zDim);
+    return `        {"shape": "cuboid", "x": [${x0}, ${x1}], "y": [${y0}, ${y1}], "z": [${z0}, ${z1}], "boundary": "${item.boundary}"},`;
+  }
+
+  return `        {"shape": "cuboid", "x": [${x0}, ${x1}], "y": [${y0}, ${y1}], "boundary": "${item.boundary}"},`;
+}
+
 function geometryLinesFromCase(caseData) {
   return caseData.objects
     .filter((item) => item.type === "cuboid")
-    .map((item) => {
-      const x0 = Math.round(item.position.x);
-      const y0 = Math.round(item.position.y);
-      const w = Math.max(1, Math.round(item.size.width ?? 1));
-      const h = Math.max(1, Math.round(item.size.height ?? 1));
-      return `        {"shape": "cuboid", "x": [${x0}, ${x0 + w}], "y": [${y0}, ${y0 + h}], "boundary": "${item.boundary}"},`;
-    })
+    .map((item) => cuboidGeometryLine(item, caseData))
     .join("\n");
 }
 
 export function generateQlBmScript(caseData) {
   const geometry = geometryLinesFromCase(caseData);
-  const x = Number(caseData.grid.x) || 8;
-  const y = Number(caseData.grid.y) || 8;
-  const steps = Number(caseData.simulation.timeSteps) || 1;
-  const shots = Number(caseData.simulation.shots) || 256;
+  const steps = Math.max(1, Number(caseData.simulation.timeSteps) || 1);
+  const shots = Math.max(1, Number(caseData.simulation.shots) || 256);
 
   return `from pathlib import Path
 import os
 
 from qiskit_aer import AerSimulator
-from qlbm.components import CQLBM, CollisionlessInitialConditions, EmptyPrimitive, GridMeasurement
-from qlbm.infra import QiskitRunner, SimulationConfig
-from qlbm.lattice import CollisionlessLattice
-from qlbm.tools.utils import create_directory_and_parents
+from qlbm.components import EmptyPrimitive, GridMeasurement, MSInitialConditions, MSQLBM
+from qlbm.infra.runner import QiskitRunner, SimulationConfig
+from qlbm.lattice import MSLattice
 
 output_dir = Path(os.environ["QLBM_OUTPUT_DIR"])
-create_directory_and_parents(str(output_dir))
+output_dir.mkdir(parents=True, exist_ok=True)
 
-lattice = CollisionlessLattice(
+lattice = MSLattice(
     {
-        "lattice": {"dim": {"x": ${x}, "y": ${y}}, "velocities": {"x": 4, "y": 4}},
+        "lattice": {${latticeDimensionBlock(caseData)}, ${latticeVelocityBlock(caseData)}},
         "geometry": [
 ${geometry || "            "}
         ],
@@ -40,8 +73,8 @@ ${geometry || "            "}
 )
 
 cfg = SimulationConfig(
-    initial_conditions=CollisionlessInitialConditions(lattice),
-    algorithm=CQLBM(lattice),
+    initial_conditions=MSInitialConditions(lattice),
+    algorithm=MSQLBM(lattice),
     postprocessing=EmptyPrimitive(lattice),
     measurement=GridMeasurement(lattice),
     target_platform="QISKIT",
@@ -52,7 +85,9 @@ cfg = SimulationConfig(
     sampling_backend=AerSimulator(method="statevector"),
 )
 
+cfg.validate()
 cfg.prepare_for_simulation()
+
 runner = QiskitRunner(cfg, lattice)
 runner.run(${steps}, ${shots}, str(output_dir), statevector_snapshots=True)
 print("qlbm run completed", output_dir, flush=True)

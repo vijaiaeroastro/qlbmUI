@@ -52,6 +52,49 @@ def choose_install_dir(args: argparse.Namespace) -> Path:
     return Path(response).expanduser().resolve()
 
 
+def launcher_path(install_dir: Path) -> Path:
+    if sys.platform.startswith("win"):
+        return install_dir / "start-qlbm-local-helper.bat"
+    return install_dir / "start-qlbm-local-helper.sh"
+
+
+def installation_exists(install_dir: Path) -> bool:
+    return (install_dir / ".venv").exists() or launcher_path(install_dir).exists()
+
+
+def choose_existing_install_action(args: argparse.Namespace, install_dir: Path) -> str:
+    if args.action:
+        return args.action
+
+    if not installation_exists(install_dir):
+        return "install"
+
+    if args.yes or not sys.stdin.isatty():
+        return "upgrade"
+
+    print()
+    print(f"An existing qlbm local helper installation was found in:")
+    print(f"  {install_dir}")
+    print()
+    print("Choose what to do:")
+    print("  1) Upgrade existing installation")
+    print("  2) Reinstall from scratch")
+    print("  3) Remove installation")
+    print("  4) Cancel")
+
+    while True:
+        response = input("Selection [1/2/3/4]: ").strip() or "1"
+        if response == "1":
+            return "upgrade"
+        if response == "2":
+            return "reinstall"
+        if response == "3":
+            return "remove"
+        if response == "4":
+            return "cancel"
+        print("Please enter 1, 2, 3, or 4.")
+
+
 def run(cmd: list[str], *, cwd: Path | None = None) -> None:
     print(f"$ {' '.join(cmd)}")
     subprocess.run(cmd, cwd=str(cwd) if cwd else None, check=True)
@@ -89,8 +132,8 @@ def venv_python(venv_dir: Path) -> Path:
 
 
 def write_launcher(install_dir: Path, python_path: Path) -> Path:
+    launcher = launcher_path(install_dir)
     if sys.platform.startswith("win"):
-        launcher = install_dir / "start-qlbm-local-helper.bat"
         launcher.write_text(
             textwrap.dedent(
                 f"""\
@@ -116,17 +159,18 @@ def write_launcher(install_dir: Path, python_path: Path) -> Path:
     return launcher
 
 
-def main() -> int:
-    parser = argparse.ArgumentParser(description="Install the qlbm local helper.")
-    parser.add_argument("--install-dir", help="Target directory for the helper installation.")
-    parser.add_argument("--yes", action="store_true", help="Accept defaults without prompting.")
-    args = parser.parse_args()
+def remove_installation(install_dir: Path) -> None:
+    if not install_dir.exists():
+        print(f"No helper installation found in {install_dir}")
+        return
 
-    if sys.version_info < (3, 11):
-        print("Python 3.11 or newer is required.", file=sys.stderr)
-        return 1
+    shutil.rmtree(install_dir)
+    print()
+    print("qlbm local helper removed successfully.")
+    print(f"Removed: {install_dir}")
 
-    install_dir = choose_install_dir(args)
+
+def install_helper(install_dir: Path, *, force_reinstall: bool) -> Path:
     install_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="qlbm-ui-helper-") as temp_name:
@@ -138,12 +182,59 @@ def main() -> int:
         python_path = venv_python(venv_dir)
 
         run([str(python_path), "-m", "pip", "install", "--upgrade", "pip"])
-        run([str(python_path), "-m", "pip", "install", str(helper_dir)])
+        pip_install_cmd = [str(python_path), "-m", "pip", "install", "--upgrade"]
+        if force_reinstall:
+            pip_install_cmd.append("--force-reinstall")
+        pip_install_cmd.append(str(helper_dir))
+        run(pip_install_cmd)
 
-        launcher = write_launcher(install_dir, python_path)
+        return write_launcher(install_dir, python_path)
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser(description="Install the qlbm local helper.")
+    parser.add_argument("--install-dir", help="Target directory for the helper installation.")
+    parser.add_argument(
+        "--action",
+        choices=["install", "upgrade", "reinstall", "remove"],
+        help="Lifecycle action to perform. If omitted, the installer chooses based on whether an installation already exists.",
+    )
+    parser.add_argument("--yes", action="store_true", help="Accept defaults without prompting.")
+    args = parser.parse_args()
+
+    if sys.version_info < (3, 11):
+        print("Python 3.11 or newer is required.", file=sys.stderr)
+        return 1
+
+    install_dir = choose_install_dir(args)
+    action = choose_existing_install_action(args, install_dir)
+
+    if action == "cancel":
+        print("Cancelled.")
+        return 0
+
+    if action == "remove":
+        remove_installation(install_dir)
+        return 0
+
+    if action == "install" and installation_exists(install_dir):
+        print()
+        print(f"An installation already exists in {install_dir}.")
+        print("Use --action upgrade, --action reinstall, or rerun interactively.")
+        return 1
+
+    if action == "reinstall" and install_dir.exists():
+        shutil.rmtree(install_dir)
+
+    launcher = install_helper(install_dir, force_reinstall=action in {"upgrade", "reinstall"})
 
     print()
-    print("qlbm local helper installed successfully.")
+    if action == "upgrade":
+        print("qlbm local helper upgraded successfully.")
+    elif action == "reinstall":
+        print("qlbm local helper reinstalled successfully.")
+    else:
+        print("qlbm local helper installed successfully.")
     print(f"Install directory: {install_dir}")
     print(f"Launcher: {launcher}")
     print()
@@ -151,6 +242,7 @@ def main() -> int:
     print(f"  {launcher}")
     print()
     print("The helper listens on http://127.0.0.1:8712 by default.")
+    print("Rerun this installer later to upgrade, reinstall, or remove the helper.")
     return 0
 
 

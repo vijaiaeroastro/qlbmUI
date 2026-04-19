@@ -21,23 +21,26 @@
     <div class="relative overflow-hidden border-b border-border bg-gradient-to-br from-accent/10 via-surface-1 to-surface-2">
       <div class="absolute inset-0 opacity-60" style="background: radial-gradient(circle at top right, rgba(11,141,184,0.16), transparent 32%), radial-gradient(circle at left center, rgba(10,123,98,0.10), transparent 28%);"></div>
       <div class="relative flex items-start justify-between gap-4 p-6 pb-5">
-      <div>
-        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full border border-accent/15 bg-white/70 text-[0.68rem] font-mono uppercase tracking-[0.16em] text-accent-strong">
-          <span class="w-1.5 h-1.5 rounded-full bg-accent"></span>
-          Local Runtime
+      <div class="flex items-start gap-4">
+        <img
+          src="/logo.png"
+          alt="QLBM logo"
+          class="h-14 w-14 rounded-2xl border border-border bg-surface-0 object-contain shadow-sm" />
+        <div>
+          <div class="text-[0.72rem] font-mono font-bold uppercase tracking-[0.18em] text-ink-faint">QLBM Workstation</div>
+          <h2 class="mt-4 text-2xl font-display font-bold text-ink">
+            {step === "welcome" ? "Set Up Local Helper" : step === "install" ? "Install the Local Helper" : "Connect Local Helper"}
+          </h2>
+          <p class="mt-2 text-sm text-ink-muted leading-relaxed max-w-2xl">
+            {#if step === "welcome"}
+              qlbmUI runs simulations through a small local helper service. We can either connect to one you already have or help you install it.
+            {:else if step === "install"}
+              Install the helper once on this machine, then start it and return here to connect.
+            {:else}
+              Paste the connection code from the helper terminal, or enter an address manually.
+            {/if}
+          </p>
         </div>
-        <h2 class="mt-4 text-2xl font-display font-bold text-ink">
-          {step === "welcome" ? "Set Up Local Helper" : step === "install" ? "Install the Local Helper" : "Connect Local Helper"}
-        </h2>
-        <p class="mt-2 text-sm text-ink-muted leading-relaxed max-w-2xl">
-          {#if step === "welcome"}
-            qlbmUI runs simulations through a small local helper service. We can either connect to one you already have or help you install it.
-          {:else if step === "install"}
-            Install the helper once on this machine, then start it and return here to connect.
-          {:else}
-            Paste the connection code from the helper terminal, or enter an address manually.
-          {/if}
-        </p>
       </div>
       <button
         class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-muted hover:text-ink hover:border-border-hover transition-colors cursor-pointer disabled:opacity-30 disabled:cursor-not-allowed"
@@ -132,6 +135,9 @@
                   127.0.0.1:8712
                 </span>
                 by default.
+              </p>
+              <p class="mt-2 text-xs text-ink-faint">
+                Run the same installer again later if you want to upgrade, reinstall, or remove the helper.
               </p>
             </div>
 

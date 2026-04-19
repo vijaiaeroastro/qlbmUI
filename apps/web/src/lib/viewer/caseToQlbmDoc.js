@@ -36,16 +36,18 @@ function obstacleEntity(item, is3D) {
     };
   }
 
-  const w = Number(item.size?.width) || 1;
-  const h = Number(item.size?.height) || 1;
-  const d = is3D ? Number(item.size?.depth) || 1 : 1;
+  const rawWidth = Number(item.size?.width) || 1;
+  const rawHeight = Number(item.size?.height) || 1;
+  const rawDepth = Number(item.size?.depth) || 1;
+  const side = Math.max(1, rawWidth, rawHeight, rawDepth);
+  const size = is3D ? [rawWidth, rawHeight, rawDepth] : [side, side, 1];
   return {
     id: item.id,
     kind: "solid.cuboid",
     name: item.name,
     params: {
       center: [x, y, z],
-      size: [w, h, d]
+      size
     },
     tags: ["solid", item.boundary]
   };

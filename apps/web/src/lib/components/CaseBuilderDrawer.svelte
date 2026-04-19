@@ -11,14 +11,9 @@
 
   const directionOptions = ["N", "S", "E", "W", "NE", "NW", "SE", "SW"];
 
-  $: visibleAxes = caseData.dimension === "1D" ? ["x"] : caseData.dimension === "2D" ? ["x", "y"] : ["x", "y", "z"];
-
-  function toggleDirection(direction) {
-    const next = caseData.initialConditions.directions.includes(direction)
-      ? caseData.initialConditions.directions.filter((item) => item !== direction)
-      : [...caseData.initialConditions.directions, direction];
-    onInitialConditionChange("directions", next);
-  }
+  $: visibleAxes = caseData.dimension === "3D" ? ["x", "y", "z"] : ["x", "y"];
+  $: is3D = caseData.dimension === "3D";
+  $: cuboidLabel = is3D ? "Cube" : "Square";
 </script>
 
 <aside class="w-[25rem] max-w-[42vw] min-w-[21rem] border-r border-border bg-surface-1/97 shadow-panel backdrop-blur-sm flex flex-col min-h-0">
@@ -89,7 +84,6 @@
             class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink focus:outline-none focus:border-accent/40 transition-colors cursor-pointer"
             value={caseData.dimension}
             on:change={(event) => onFieldChange("dimension", event.currentTarget.value)}>
-            <option value="1D">1D</option>
             <option value="2D">2D</option>
             <option value="3D">3D</option>
           </select>
@@ -145,12 +139,13 @@
         <select
           id="initial-preset"
           class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink focus:outline-none focus:border-accent/40 transition-colors cursor-pointer"
-          value={caseData.initialConditions.preset}
+          value="uniform"
           on:change={(event) => onInitialConditionChange("preset", event.currentTarget.value)}>
           <option value="uniform">Uniform</option>
-          <option value="point">Point</option>
-          <option value="directional-inlet">Directional inlet</option>
+          <option value="point" disabled>Point (coming later)</option>
+          <option value="directional-inlet" disabled>Directional inlet (coming later)</option>
         </select>
+        <p class="text-xs text-ink-faint">Only uniform initialization is available right now. Other source modes are coming later.</p>
       </div>
 
       <div class="space-y-2">
@@ -160,14 +155,13 @@
             <button
               type="button"
               class="px-2.5 py-1.5 text-xs font-mono font-bold rounded-lg border transition-all cursor-pointer
-                {caseData.initialConditions.directions.includes(direction)
-                  ? 'border-accent/30 bg-accent/15 text-accent'
-                  : 'border-border bg-surface-3 text-ink-faint hover:text-ink-muted'}"
-              on:click={() => toggleDirection(direction)}>
+                border-border bg-surface-3 text-ink-faint opacity-45 cursor-not-allowed"
+              disabled={true}>
               {direction}
             </button>
           {/each}
         </div>
+        <p class="text-xs text-ink-faint">Directional initial conditions are not enabled yet.</p>
       </div>
 
       <div class="space-y-2">
@@ -229,26 +223,28 @@
       <div class="flex items-start justify-between gap-3">
         <div>
           <h2 class="text-sm font-display font-bold text-ink">Obstacles</h2>
-          <p class="mt-0.5 text-xs text-ink-faint">Solid geometry in the domain.</p>
+          <p class="mt-0.5 text-xs text-ink-faint">Solid box geometry in the domain.</p>
         </div>
         <div class="flex gap-2">
           <button
             class="px-3 py-1.5 text-xs font-bold rounded-lg border border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 transition-colors cursor-pointer"
             on:click={() => onAddObject("cuboid")}>
-            + Cuboid
+            + {cuboidLabel}
           </button>
           <button
-            class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-            on:click={() => onAddObject("sphere")}>
-            + Sphere
+            class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-faint opacity-50 cursor-not-allowed"
+            type="button"
+            disabled={true}>
+            + {is3D ? "Sphere" : "Circle"} · later
           </button>
         </div>
       </div>
+      <p class="text-xs text-ink-faint">The current MSQLBM demo path supports box obstacles in 2D and 3D. Circle and sphere support are disabled for now.</p>
 
       {#if caseData.objects.length === 0}
         <div class="rounded-xl border border-dashed border-border bg-surface-3/40 px-4 py-8 text-center">
           <p class="text-sm text-ink-muted">No obstacles yet.</p>
-          <p class="mt-1 text-xs text-ink-faint">Add a cuboid or sphere to place solid geometry in the domain.</p>
+          <p class="mt-1 text-xs text-ink-faint">Add a {cuboidLabel.toLowerCase()} to place solid geometry in the domain.</p>
         </div>
       {:else}
         <div class="space-y-3">
@@ -257,7 +253,7 @@
               <div class="flex items-start justify-between gap-3">
                 <div>
                   <strong class="text-sm text-ink">{item.name}</strong>
-                  <div class="text-[0.65rem] text-ink-faint mt-0.5">{item.type} · {item.boundary}</div>
+                  <div class="text-[0.65rem] text-ink-faint mt-0.5">{cuboidLabel} · {item.boundary}</div>
                 </div>
                 <button
                   class="px-2.5 py-1 text-[0.65rem] font-semibold rounded-md border border-bad/20 bg-bad-glow text-bad hover:bg-bad/15 transition-colors cursor-pointer"
@@ -281,11 +277,11 @@
                   <select
                     id={`${item.id}-shape`}
                     class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink focus:outline-none focus:border-accent/40 transition-colors cursor-pointer"
-                    value={item.type}
-                    on:change={(event) => onObjectChange(item.id, "type", event.currentTarget.value)}>
-                    <option value="cuboid">Cuboid</option>
-                    <option value="sphere">Sphere</option>
+                    value="cuboid"
+                    disabled={true}>
+                    <option value="cuboid">{cuboidLabel}</option>
                   </select>
+                  <p class="text-[0.65rem] text-ink-faint">Only box obstacles are enabled in the runnable demo path.</p>
                 </div>
                 <div class="space-y-1.5">
                   <label for={`${item.id}-boundary`} class="text-[0.65rem] font-semibold uppercase tracking-wider text-ink-faint">Boundary</label>
@@ -319,47 +315,15 @@
               <div class="space-y-2">
                 <span class="text-[0.65rem] font-semibold uppercase tracking-wider text-ink-faint">Size</span>
                 <div class="grid grid-cols-3 gap-2">
-                  {#if item.type === "sphere"}
-                    <label class="space-y-1">
-                      <span class="text-[0.6rem] font-mono font-bold text-ink-faint">Radius</span>
-                      <input
-                        class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 transition-colors"
-                        type="number"
-                        min="1"
-                        value={item.size.radius}
-                        on:input={(event) => onObjectChange(item.id, "size.radius", Number(event.currentTarget.value))} />
-                    </label>
-                  {:else}
-                    <label class="space-y-1">
-                      <span class="text-[0.6rem] font-mono font-bold text-ink-faint">W</span>
-                      <input
-                        class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 transition-colors"
-                        type="number"
-                        min="1"
-                        value={item.size.width}
-                        on:input={(event) => onObjectChange(item.id, "size.width", Number(event.currentTarget.value))} />
-                    </label>
-                    <label class="space-y-1">
-                      <span class="text-[0.6rem] font-mono font-bold text-ink-faint">H</span>
-                      <input
-                        class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 transition-colors"
-                        type="number"
-                        min="1"
-                        value={item.size.height}
-                        on:input={(event) => onObjectChange(item.id, "size.height", Number(event.currentTarget.value))} />
-                    </label>
-                    {#if caseData.dimension === "3D"}
-                      <label class="space-y-1">
-                        <span class="text-[0.6rem] font-mono font-bold text-ink-faint">D</span>
-                        <input
-                          class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 transition-colors"
-                          type="number"
-                          min="1"
-                          value={item.size.depth}
-                          on:input={(event) => onObjectChange(item.id, "size.depth", Number(event.currentTarget.value))} />
-                      </label>
-                    {/if}
-                  {/if}
+                  <label class="space-y-1">
+                    <span class="text-[0.6rem] font-mono font-bold text-ink-faint">{is3D ? "Edge" : "Side"}</span>
+                    <input
+                      class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 transition-colors"
+                      type="number"
+                      min="1"
+                      value={item.size.width}
+                      on:input={(event) => onObjectChange(item.id, "size.width", Number(event.currentTarget.value))} />
+                  </label>
                 </div>
               </div>
             </div>

@@ -4,6 +4,7 @@
   import WorkspaceHeader from "./lib/components/WorkspaceHeader.svelte";
   import ConnectModal from "./lib/components/ConnectModal.svelte";
   import CaseBuilderDrawer from "./lib/components/CaseBuilderDrawer.svelte";
+  import RunLaunchOverlay from "./lib/components/RunLaunchOverlay.svelte";
   import RunsView from "./lib/components/RunsView.svelte";
   import SetupView from "./lib/components/SetupView.svelte";
   import ResultsView from "./lib/components/ResultsView.svelte";
@@ -34,11 +35,199 @@
   let helperHealthTimer = null;
   let currentStepIndex = 0;
   let isPlaying = false;
-  let setupDrawerOpen = true;
+  let setupDrawerOpen = false;
+  let setupNeedsDimensionChoice = true;
+  let preferredCaseDimension = "2D";
+  let runLaunchState = null;
 
   $: generatedScript = generateQlBmScript(caseData);
+  $: if (caseData.initialConditions?.preset !== "uniform") {
+    caseData = {
+      ...caseData,
+      initialConditions: {
+        ...caseData.initialConditions,
+        preset: "uniform",
+        directions: ["E"]
+      }
+    };
+  }
+  $: if (caseData.objects.some((item) => item.type !== "cuboid")) {
+    caseData = {
+      ...caseData,
+      objects: caseData.objects.map((item) =>
+        normalizeObjectForDimension({ ...item, type: "cuboid" }, caseData.dimension)
+      )
+    };
+  }
   $: vtiArtifacts = currentArtifacts.filter((item) => item.path.endsWith(".vti"));
   $: geometryArtifacts = currentArtifacts.filter((item) => item.path.endsWith(".stl"));
+  $: runLaunchActive = !!runLaunchState && ["queued", "running"].includes(runLaunchState.status);
+
+  function createObjectSize(dimension) {
+    return dimension === "3D"
+      ? { width: 3, height: 3, depth: 3 }
+      : { width: 3, height: 3, depth: 1 };
+  }
+
+  function normalizeObjectForDimension(item, dimension) {
+    const next = structuredClone(item);
+    const side = Math.max(
+      1,
+      Number(next.size?.width) || Number(next.size?.height) || Number(next.size?.depth) || Number(next.size?.radius) || 3
+    );
+    next.type = "cuboid";
+    next.size = dimension === "3D"
+      ? { width: side, height: side, depth: side }
+      : { width: side, height: side, depth: 1 };
+
+    if (dimension !== "3D") {
+      next.position = { ...next.position, z: 0 };
+    }
+
+    return next;
+  }
+
+  function createCaseForDimension(dimension) {
+    const nextCase = createDefaultCase();
+    nextCase.dimension = dimension;
+    nextCase.objects = [];
+    nextCase.initialConditions.region = {
+      ...nextCase.initialConditions.region,
+      zMin: 0,
+      zMax: dimension === "3D" ? Math.min(3, Math.max((nextCase.grid.z || 1) - 1, 0)) : 0
+    };
+    return nextCase;
+  }
+
+  function createSeedRegionForWizard(caseDraft, preset, directions) {
+    const xMax = Math.max((caseDraft.grid.x || 1) - 1, 0);
+    const yMax = Math.max((caseDraft.grid.y || 1) - 1, 0);
+    const zMax = Math.max((caseDraft.grid.z || 1) - 1, 0);
+    const hasDirection = (token) => directions.includes(token);
+
+    if (preset === "point") {
+      const centerX = Math.floor(caseDraft.grid.x / 2);
+      const centerY = Math.floor(caseDraft.grid.y / 2);
+      const centerZ = caseDraft.dimension === "3D" ? Math.floor(caseDraft.grid.z / 2) : 0;
+      return {
+        xMin: centerX,
+        xMax: centerX,
+        yMin: centerY,
+        yMax: centerY,
+        zMin: centerZ,
+        zMax: centerZ
+      };
+    }
+
+    if (preset === "directional-inlet") {
+      if (hasDirection("W") || hasDirection("NW") || hasDirection("SW")) {
+        return { xMin: Math.max(xMax - 2, 0), xMax, yMin: 0, yMax, zMin: 0, zMax: caseDraft.dimension === "3D" ? zMax : 0 };
+      }
+      if (hasDirection("N") || hasDirection("NE") || hasDirection("NW")) {
+        return { xMin: 0, xMax, yMin: 0, yMax: Math.min(2, yMax), zMin: 0, zMax: caseDraft.dimension === "3D" ? zMax : 0 };
+      }
+      if (hasDirection("S") || hasDirection("SE") || hasDirection("SW")) {
+        return { xMin: 0, xMax, yMin: Math.max(yMax - 2, 0), yMax, zMin: 0, zMax: caseDraft.dimension === "3D" ? zMax : 0 };
+      }
+
+      return { xMin: 0, xMax: Math.min(2, xMax), yMin: 0, yMax, zMin: 0, zMax: caseDraft.dimension === "3D" ? zMax : 0 };
+    }
+
+    return {
+      xMin: 0,
+      xMax,
+      yMin: 0,
+      yMax,
+      zMin: 0,
+      zMax: caseDraft.dimension === "3D" ? zMax : 0
+    };
+  }
+
+  function createStarterObject(type, dimension, grid) {
+    const centerX = Math.max(2, Math.floor((grid.x || 1) / 2));
+    const centerY = Math.max(2, Math.floor((grid.y || 1) / 2));
+    const centerZ = dimension === "3D" ? Math.max(1, Math.floor((grid.z || 1) / 2)) : 0;
+    return normalizeObjectForDimension(
+      {
+        id: "object-1",
+        name: "Object 1",
+        type: "cuboid",
+        boundary: "bounceback",
+        position: { x: centerX, y: centerY, z: centerZ },
+        size: createObjectSize(dimension)
+      },
+      dimension
+    );
+  }
+
+  function coercePositiveInt(value, fallback, minimum = 1) {
+    const numeric = Number(value);
+    if (!Number.isFinite(numeric)) {
+      return fallback;
+    }
+    return Math.max(minimum, Math.round(numeric));
+  }
+
+  function initializeCaseFromWizard(config) {
+    const dimension = config.dimension || "2D";
+    const nextCase = createCaseForDimension(dimension);
+    const gridConfig = config.grid || {};
+    nextCase.name = (config.name || "").trim() || nextCase.name;
+    nextCase.notes = (config.notes || "").trim() || "";
+    nextCase.grid = {
+      x: coercePositiveInt(gridConfig.x, nextCase.grid.x, 2),
+      y: coercePositiveInt(gridConfig.y, nextCase.grid.y, 2),
+      z: dimension === "3D"
+        ? coercePositiveInt(gridConfig.z, nextCase.grid.z, 2)
+        : nextCase.grid.z
+    };
+
+    const directions = Array.isArray(config.directions) && config.directions.length ? config.directions : ["E"];
+
+    nextCase.initialConditions = {
+      ...nextCase.initialConditions,
+      preset: config.preset || "uniform",
+      directions,
+      region: createSeedRegionForWizard(nextCase, config.preset || "uniform", directions)
+    };
+
+    nextCase.simulation = {
+      ...nextCase.simulation,
+      timeSteps: coercePositiveInt(config.simulation?.timeSteps, nextCase.simulation.timeSteps, 1),
+      shots: coercePositiveInt(config.simulation?.shots, nextCase.simulation.shots, 1)
+    };
+
+    if (config.starterObstacle && config.starterObstacle !== "none") {
+      nextCase.objects = [createStarterObject(config.starterObstacle, dimension, nextCase.grid)];
+    }
+
+    preferredCaseDimension = dimension;
+    caseData = nextCase;
+    setupNeedsDimensionChoice = false;
+    setupDrawerOpen = true;
+    setupTab = "preview";
+    currentView = "setup";
+  }
+
+  function syncRunLaunchState(run) {
+    if (!run) {
+      return;
+    }
+
+    runLaunchState = {
+      runId: run.run_id,
+      status: run.status,
+      stage: run.progress?.stage || run.status || "unknown",
+      message: run.progress?.message || "",
+      percent: Number(run.progress?.percent ?? 0),
+      stdoutTail: typeof run.stdout_tail === "string" ? run.stdout_tail : "",
+      stderrTail: typeof run.stderr_tail === "string" ? run.stderr_tail : ""
+    };
+  }
+
+  function clearRunLaunchState() {
+    runLaunchState = null;
+  }
 
   function navigateTo(viewId) {
     if (viewId === "connect") {
@@ -48,9 +237,12 @@
     }
     if (viewId === "setup") {
       if (currentView === "setup") {
+        if (setupNeedsDimensionChoice) {
+          return;
+        }
         setupDrawerOpen = !setupDrawerOpen;
       } else {
-        setupDrawerOpen = true;
+        setupDrawerOpen = !setupNeedsDimensionChoice;
         currentView = "setup";
       }
       return;
@@ -154,6 +346,7 @@
       decodedAddress = "";
       errorMessage = "The local helper is no longer reachable. Start it again or reconnect.";
       connectionNotice = "Helper unavailable";
+      clearRunLaunchState();
       connectModalStep = "welcome";
       showConnectModal = true;
       stopHelperHealthPolling();
@@ -185,6 +378,7 @@
       showConnectModal = true;
       return;
     }
+    clearRunLaunchState();
     stopPlayback();
     currentRun = await getRun(helperAddress, runId);
     const artifactResponse = await listArtifacts(helperAddress, runId);
@@ -200,12 +394,14 @@
     clearTimeout(pollTimer);
     const run = await getRun(helperAddress, runId);
     currentRun = run;
+    syncRunLaunchState(run);
     if (run.status === "queued" || run.status === "running") {
       pollTimer = setTimeout(() => {
         pollRunUntilSettled(runId);
       }, 1200);
       return;
     }
+    clearRunLaunchState();
     await refreshRuns();
     await openResults(runId);
   }
@@ -215,10 +411,12 @@
       showConnectModal = true;
       return;
     }
+    clearRunLaunchState();
     stopPlayback();
     caseData = createDefaultCase();
     setupTab = "preview";
-    setupDrawerOpen = true;
+    setupNeedsDimensionChoice = true;
+    setupDrawerOpen = false;
     currentView = "setup";
   }
 
@@ -258,6 +456,17 @@
   }
 
   function updateField(key, value) {
+    if (key === "dimension") {
+      preferredCaseDimension = value;
+      setupNeedsDimensionChoice = false;
+      caseData = {
+        ...caseData,
+        dimension: value,
+        objects: caseData.objects.map((item) => normalizeObjectForDimension(item, value))
+      };
+      return;
+    }
+
     caseData = { ...caseData, [key]: value };
   }
 
@@ -306,15 +515,15 @@
     const nextObject = {
       id: `object-${nextIndex}`,
       name: `Object ${nextIndex}`,
-      type,
+      type: "cuboid",
       boundary: "bounceback",
       position: { x: nextIndex * 2, y: nextIndex * 2, z: 0 },
-      size: type === "sphere" ? { radius: 2 } : { width: 3, height: 3, depth: 3 }
+      size: createObjectSize(caseData.dimension)
     };
 
     caseData = {
       ...caseData,
-      objects: [...caseData.objects, nextObject]
+      objects: [...caseData.objects, normalizeObjectForDimension(nextObject, caseData.dimension)]
     };
   }
 
@@ -330,13 +539,19 @@
         const [top, nested] = path.split(".");
         if (nested) {
           next[top][nested] = value;
+          if (top === "size" && item.type === "cuboid") {
+            const side = Math.max(1, Number(value) || 1);
+            next.size.width = side;
+            next.size.height = side;
+            next.size.depth = caseData.dimension === "3D" ? side : 1;
+          }
         } else {
           next[top] = value;
           if (path === "type") {
-            next.size = value === "sphere" ? { radius: 2 } : { width: 3, height: 3, depth: 3 };
+            next.size = createObjectSize(caseData.dimension);
           }
         }
-        return next;
+        return normalizeObjectForDimension(next, caseData.dimension);
       })
     };
   }
@@ -362,9 +577,9 @@
     });
 
     currentRun = run;
+    syncRunLaunchState(run);
     currentArtifacts = [];
     currentStepIndex = 0;
-    currentView = "results";
     await pollRunUntilSettled(run.run_id);
   }
 
@@ -426,7 +641,7 @@
       currentRun={currentRun}
       onNavigate={navigateTo} />
 
-    {#if currentView === "setup" && setupDrawerOpen}
+    {#if currentView === "setup" && setupDrawerOpen && !setupNeedsDimensionChoice}
       <CaseBuilderDrawer
         {caseData}
         onFieldChange={updateField}
@@ -467,14 +682,10 @@
             selectedTab={setupTab}
             {generatedScript}
             onBack={() => (currentView = "runs")}
-            onFieldChange={updateField}
-            onGridChange={updateGrid}
-            onInitialConditionChange={updateInitialCondition}
-            onSimulationChange={updateSimulation}
-            onAddObject={addObject}
-            onObjectChange={updateObject}
-            onDeleteObject={removeObject}
+            needsDimensionChoice={setupNeedsDimensionChoice}
+            {preferredCaseDimension}
             onChangeTab={(tabId) => (setupTab = tabId)}
+            onInitializeCase={initializeCaseFromWizard}
             onSubmit={submitCurrentCase} />
         {:else}
           <ResultsView
@@ -513,5 +724,9 @@
       onDecode={handleDecode}
       onConnect={handleConnect}
       onClose={closeConnectModal} />
+  {/if}
+
+  {#if runLaunchActive}
+    <RunLaunchOverlay state={runLaunchState} />
   {/if}
 </div>

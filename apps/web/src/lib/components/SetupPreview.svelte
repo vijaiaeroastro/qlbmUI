@@ -54,14 +54,13 @@
         };
       }
 
-      const width = Math.max(Number(item.size.width) || 1, 1) * scale;
-      const height = Math.max(Number(item.size.height) || 1, 1) * scale;
+      const side = Math.max(Number(item.size.width) || 1, Number(item.size.height) || 1, Number(item.size.depth) || 1, 1) * scale;
       return {
         kind: "cuboid",
-        x: x(Number(item.position.x) || 0) - width / 2,
-        y: y(Number(item.position.y) || 0) - height / 2,
-        width,
-        height,
+        x: x(Number(item.position.x) || 0) - side / 2,
+        y: y(Number(item.position.y) || 0) - side / 2,
+        width: side,
+        height: side,
         item
       };
     });
