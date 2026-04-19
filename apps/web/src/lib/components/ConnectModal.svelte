@@ -50,8 +50,7 @@
 
     <div class="p-6 space-y-5 bg-gradient-to-b from-surface-1 to-surface-2/60">
       {#if step === "welcome"}
-        <div class="rounded-[26px] border border-border bg-white/75 p-4 shadow-sm">
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
           <button
             class="text-left rounded-[24px] border-2 border-black bg-gradient-to-br from-accent/10 to-white hover:border-accent-strong hover:from-accent/15 hover:to-surface-1 hover:-translate-y-0.5 transition-all p-5 cursor-pointer shadow-glow"
             on:click={onChooseExistingHelper}>
@@ -81,7 +80,6 @@
               Show the install and startup steps for the local helper so I can run qlbmUI on this machine.
             </p>
           </button>
-        </div>
         </div>
 
         <div class="rounded-[22px] border-2 border-black bg-white/80 px-5 py-4 shadow-sm">
