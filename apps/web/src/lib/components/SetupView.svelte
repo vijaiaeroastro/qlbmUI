@@ -5,7 +5,9 @@
   export let caseData;
   export let selectedTab = "preview";
   export let generatedScript = "";
+  export let inspectorCollapsed = false;
   export let onBack;
+  export let onToggleInspector;
   export let onFieldChange;
   export let onGridChange;
   export let onInitialConditionChange;
@@ -33,29 +35,71 @@
   }
 </script>
 
-<div class="grid grid-cols-1 xl:grid-cols-[minmax(400px,520px)_1fr] gap-4 animate-fade-in">
-  <!-- Left: inspector panel -->
-  <section class="space-y-3">
-    <!-- Toolbar -->
-    <div class="flex items-center justify-between gap-2">
+<div class="space-y-4 animate-fade-in">
+  <div class="flex flex-wrap items-center justify-between gap-2">
+    <div class="flex flex-wrap items-center gap-2">
       <button
         class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-muted hover:text-ink hover:border-border-hover transition-colors cursor-pointer"
         on:click={onBack}>
         Back to Runs
       </button>
-      <div class="flex gap-2">
-        <button
-          class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-muted hover:text-ink transition-colors cursor-pointer"
-          on:click={() => onChangeTab("script")}>
-          Inspect Python
-        </button>
-        <button
-          class="px-4 py-1.5 text-xs font-bold rounded-lg border border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 transition-colors cursor-pointer"
-          on:click={onSubmit}>
-          Run Locally
-        </button>
-      </div>
+      <button
+        class="h-8 w-8 flex items-center justify-center text-sm font-bold rounded-lg border transition-colors cursor-pointer
+          {inspectorCollapsed
+            ? 'border-accent/30 bg-accent/10 text-accent hover:bg-accent/20'
+            : 'border-border bg-surface-3 text-ink-muted hover:text-ink hover:border-border-hover'}"
+        on:click={onToggleInspector}
+        aria-label={inspectorCollapsed ? "Open case builder" : "Collapse case builder"}
+        title={inspectorCollapsed ? "Open case builder" : "Collapse case builder"}>
+        {inspectorCollapsed ? "+" : "−"}
+      </button>
     </div>
+    <div class="flex flex-wrap gap-2">
+      <button
+        class="px-3 py-1.5 text-xs font-semibold rounded-lg border border-border bg-surface-3 text-ink-muted hover:text-ink transition-colors cursor-pointer"
+        on:click={() => onChangeTab("script")}>
+        Inspect Python
+      </button>
+      <button
+        class="px-4 py-1.5 text-xs font-bold rounded-lg border border-accent/30 bg-accent/10 text-accent hover:bg-accent/20 transition-colors cursor-pointer"
+        on:click={onSubmit}>
+        Run Locally
+      </button>
+    </div>
+  </div>
+
+  <div class="grid grid-cols-1 gap-4 xl:grid-cols-[var(--setup-sidebar-width)_minmax(0,1fr)]" style={`--setup-sidebar-width: ${inspectorCollapsed ? "5.75rem" : "minmax(400px, 520px)"}`}>
+  <!-- Left: inspector panel -->
+  {#if inspectorCollapsed}
+    <aside class="rounded-xl border border-border bg-surface-2 p-3 min-h-[40rem] flex flex-col items-center justify-between">
+      <div class="flex flex-col items-center gap-3">
+        <button
+          class="h-10 w-10 rounded-xl border border-accent/30 bg-accent/10 text-lg font-bold text-accent hover:bg-accent/20 transition-colors cursor-pointer"
+          on:click={onToggleInspector}
+          aria-label="Open case builder">
+          +
+        </button>
+        <div class="flex flex-col items-center gap-2 text-center">
+          <span class="text-[0.6rem] font-bold uppercase tracking-[0.35em] text-accent/75 [writing-mode:vertical-rl] [transform:rotate(180deg)]">Case Builder</span>
+          <span class="text-[0.65rem] text-ink-faint [writing-mode:vertical-rl] [transform:rotate(180deg)]">Folded</span>
+        </div>
+      </div>
+
+      <div class="w-full space-y-2">
+        {#each [
+          ["Obj", caseData.objects.length],
+          ["Steps", caseData.simulation.timeSteps],
+          ["Grid", `${caseData.grid.x}x${caseData.grid.y}${caseData.dimension === "3D" ? `x${caseData.grid.z}` : ""}`]
+        ] as [label, value]}
+          <div class="rounded-lg border border-border bg-surface-3 px-2 py-2 text-center">
+            <span class="block text-[0.55rem] font-bold uppercase tracking-widest text-ink-faint">{label}</span>
+            <strong class="mt-1 block text-[0.65rem] font-mono text-ink break-all">{value}</strong>
+          </div>
+        {/each}
+      </div>
+    </aside>
+  {:else}
+    <section class="space-y-3">
 
     <!-- Case Overview -->
     <div class="rounded-xl border border-border bg-surface-2 p-4 space-y-3">
@@ -393,7 +437,8 @@
         {/each}
       </div>
     </div>
-  </section>
+    </section>
+  {/if}
 
   <!-- Right: workspace panel -->
   <section class="rounded-xl border border-border bg-surface-2 p-4 space-y-3 min-h-0">
@@ -425,8 +470,8 @@
 
     {#if selectedTab === "preview"}
       <div class="flex items-center gap-2 px-3 py-2 rounded-lg border border-warn/15 bg-warn/5">
-        <span class="text-[0.65rem] font-bold text-warn">Preview only</span>
-        <span class="text-[0.65rem] text-warn/70">Use numeric inputs as the source of truth.</span>
+        <span class="text-[0.65rem] font-bold text-warn">Setup viewport</span>
+        <span class="text-[0.65rem] text-warn/70">Planar in 2D, technical in 3D. This viewport is separate from post-processing.</span>
       </div>
       <VtkSetupCanvas {caseData} />
     {:else if selectedTab === "case"}
@@ -435,4 +480,5 @@
       <CodeBlock code={generatedScript} language="python" label="Generated Python" />
     {/if}
   </section>
+  </div>
 </div>

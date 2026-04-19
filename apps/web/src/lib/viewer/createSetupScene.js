@@ -7,6 +7,8 @@ import vtkSphereSource from "@kitware/vtk.js/Filters/Sources/SphereSource";
 import vtkMapper from "@kitware/vtk.js/Rendering/Core/Mapper";
 import vtkActor from "@kitware/vtk.js/Rendering/Core/Actor";
 
+const PLANAR_DEPTH = 0.08;
+
 function createOrientationWidget(interactor) {
   const cube = vtkAnnotatedCubeActor.newInstance();
   cube.setDefaultStyle({
@@ -45,44 +47,87 @@ function makeActor(source, color, opacity = 1) {
   return actor;
 }
 
-function createDomainActor(caseData) {
-  const depth = caseData.dimension === "3D" ? Math.max(caseData.grid.z, 1) : 0.2;
+function safeExtent(value) {
+  return Math.max(Number(value) || 1, 1);
+}
+
+function clampRegionValue(value, max) {
+  return Math.min(Math.max(Number(value) || 0, 0), max);
+}
+
+function createDomainActors(caseData) {
+  const depth = caseData.dimension === "3D" ? safeExtent(caseData.grid.z) : PLANAR_DEPTH;
   const source = vtkCubeSource.newInstance({
-    xLength: Math.max(caseData.grid.x, 1),
-    yLength: Math.max(caseData.grid.y, 1),
+    xLength: safeExtent(caseData.grid.x),
+    yLength: safeExtent(caseData.grid.y),
     zLength: depth,
-    center: [caseData.grid.x / 2, caseData.grid.y / 2, caseData.dimension === "3D" ? depth / 2 : 0]
+    center: [safeExtent(caseData.grid.x) / 2, safeExtent(caseData.grid.y) / 2, caseData.dimension === "3D" ? depth / 2 : 0]
   });
 
-  const actor = makeActor(source, [0.33, 0.43, 0.52], 1);
-  actor.getProperty().setRepresentationToWireframe();
-  actor.getProperty().setLineWidth(1.5);
+  const fillActor = makeActor(source, caseData.dimension === "3D" ? [0.8, 0.88, 0.97] : [0.9, 0.95, 0.99], caseData.dimension === "3D" ? 0.15 : 0.3);
+  fillActor.getProperty().setEdgeVisibility(false);
+
+  const outlineActor = makeActor(source, [0.29, 0.41, 0.54], 1);
+  outlineActor.getProperty().setRepresentationToWireframe();
+  outlineActor.getProperty().setLineWidth(caseData.dimension === "3D" ? 1.5 : 2);
+
+  return [fillActor, outlineActor];
+}
+
+function createSeedRegionActor(caseData) {
+  const region = caseData.initialConditions?.region || {};
+  const xMin = clampRegionValue(region.xMin, safeExtent(caseData.grid.x));
+  const xMax = clampRegionValue(region.xMax, safeExtent(caseData.grid.x));
+  const yMin = clampRegionValue(region.yMin, safeExtent(caseData.grid.y));
+  const yMax = clampRegionValue(region.yMax, safeExtent(caseData.grid.y));
+  const zMin = caseData.dimension === "3D" ? clampRegionValue(region.zMin, safeExtent(caseData.grid.z)) : 0;
+  const zMax = caseData.dimension === "3D" ? clampRegionValue(region.zMax, safeExtent(caseData.grid.z)) : PLANAR_DEPTH;
+
+  const xLength = Math.max(Math.abs(xMax - xMin) + 1, 0.6);
+  const yLength = Math.max(Math.abs(yMax - yMin) + 1, 0.6);
+  const zLength = caseData.dimension === "3D" ? Math.max(Math.abs(zMax - zMin) + 1, 0.6) : PLANAR_DEPTH;
+
+  const source = vtkCubeSource.newInstance({
+    xLength,
+    yLength,
+    zLength,
+    center: [
+      Math.min(xMin, xMax) + xLength / 2,
+      Math.min(yMin, yMax) + yLength / 2,
+      caseData.dimension === "3D" ? Math.min(zMin, zMax) + zLength / 2 : 0
+    ]
+  });
+
+  const actor = makeActor(source, [0.11, 0.67, 0.85], caseData.dimension === "3D" ? 0.16 : 0.22);
+  actor.getProperty().setEdgeVisibility(true);
+  actor.getProperty().setEdgeColor(0.08, 0.52, 0.65);
+  actor.getProperty().setLineWidth(1.3);
   return actor;
 }
 
 function createObjectActor(item, dimension) {
   if (item.type === "sphere") {
-    const radius = Math.max(item.size.radius ?? 1, 1);
+    const radius = safeExtent(item.size.radius);
     const source = vtkSphereSource.newInstance({
       radius,
-      thetaResolution: 36,
-      phiResolution: 24,
+      thetaResolution: dimension === "3D" ? 36 : 48,
+      phiResolution: dimension === "3D" ? 24 : 6,
       center: [
         item.position.x,
         item.position.y,
         dimension === "3D" ? item.position.z : 0
       ]
     });
-    const actor = makeActor(source, [0.09, 0.49, 0.56], 0.85);
+    const actor = makeActor(source, [0.9, 0.43, 0.16], dimension === "3D" ? 0.75 : 0.9);
     actor.getProperty().setEdgeVisibility(true);
-    actor.getProperty().setEdgeColor(0.05, 0.29, 0.33);
+    actor.getProperty().setEdgeColor(0.56, 0.24, 0.07);
     return actor;
   }
 
-  const depth = dimension === "3D" ? Math.max(item.size.depth ?? 1, 1) : 0.2;
+  const depth = dimension === "3D" ? safeExtent(item.size.depth) : PLANAR_DEPTH;
   const source = vtkCubeSource.newInstance({
-    xLength: Math.max(item.size.width ?? 1, 1),
-    yLength: Math.max(item.size.height ?? 1, 1),
+    xLength: safeExtent(item.size.width),
+    yLength: safeExtent(item.size.height),
     zLength: depth,
     center: [
       item.position.x,
@@ -91,15 +136,15 @@ function createObjectActor(item, dimension) {
     ]
   });
 
-  const actor = makeActor(source, [0.09, 0.49, 0.56], 0.85);
+  const actor = makeActor(source, [0.9, 0.43, 0.16], dimension === "3D" ? 0.72 : 0.86);
   actor.getProperty().setEdgeVisibility(true);
-  actor.getProperty().setEdgeColor(0.05, 0.29, 0.33);
+  actor.getProperty().setEdgeColor(0.56, 0.24, 0.07);
   return actor;
 }
 
 export function createSetupScene(container, caseData) {
   const generic = vtkGenericRenderWindow.newInstance({
-    background: [0.94, 0.96, 0.98]
+    background: [0.975, 0.985, 0.995]
   });
 
   generic.setContainer(container);
@@ -109,14 +154,22 @@ export function createSetupScene(container, caseData) {
   const renderWindow = generic.getRenderWindow();
   const interactor = generic.getInteractor();
 
-  renderer.addActor(createDomainActor(caseData));
+  for (const actor of createDomainActors(caseData)) {
+    renderer.addActor(actor);
+  }
+
+  renderer.addActor(createSeedRegionActor(caseData));
 
   for (const item of caseData.objects) {
     renderer.addActor(createObjectActor(item, caseData.dimension));
   }
 
   const axes = vtkAxesActor.newInstance();
-  axes.setTotalLength(1.4, 1.4, 1.4);
+  axes.setTotalLength(
+    Math.max(safeExtent(caseData.grid.x) * 0.16, 1.4),
+    Math.max(safeExtent(caseData.grid.y) * 0.16, 1.4),
+    caseData.dimension === "3D" ? Math.max(safeExtent(caseData.grid.z) * 0.16, 1.4) : 0.01
+  );
   renderer.addActor(axes);
 
   const orientationWidget = createOrientationWidget(interactor);
@@ -125,9 +178,17 @@ export function createSetupScene(container, caseData) {
 
   if (caseData.dimension !== "3D") {
     const camera = renderer.getActiveCamera();
-    camera.setPosition(caseData.grid.x / 2, caseData.grid.y / 2, Math.max(caseData.grid.x, caseData.grid.y) * 2.2);
-    camera.setFocalPoint(caseData.grid.x / 2, caseData.grid.y / 2, 0);
+    camera.setParallelProjection(true);
+    camera.setPosition(safeExtent(caseData.grid.x) / 2, safeExtent(caseData.grid.y) / 2, Math.max(safeExtent(caseData.grid.x), safeExtent(caseData.grid.y)) * 2.6);
+    camera.setFocalPoint(safeExtent(caseData.grid.x) / 2, safeExtent(caseData.grid.y) / 2, 0);
     camera.setViewUp(0, 1, 0);
+    camera.setParallelScale(Math.max(safeExtent(caseData.grid.x), safeExtent(caseData.grid.y)) * 0.58);
+    renderer.resetCameraClippingRange();
+  } else {
+    const camera = renderer.getActiveCamera();
+    camera.azimuth(28);
+    camera.elevation(20);
+    renderer.resetCamera();
     renderer.resetCameraClippingRange();
   }
 

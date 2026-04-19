@@ -33,6 +33,7 @@
   let helperHealthTimer = null;
   let currentStepIndex = 0;
   let isPlaying = false;
+  let setupInspectorCollapsed = false;
 
   $: generatedScript = generateQlBmScript(caseData);
   $: vtiArtifacts = currentArtifacts.filter((item) => item.path.endsWith(".vti"));
@@ -207,6 +208,7 @@
     stopPlayback();
     caseData = createDefaultCase();
     setupTab = "preview";
+    setupInspectorCollapsed = false;
     currentView = "setup";
   }
 
@@ -441,7 +443,9 @@
             {caseData}
             selectedTab={setupTab}
             {generatedScript}
+            inspectorCollapsed={setupInspectorCollapsed}
             onBack={() => (currentView = "runs")}
+            onToggleInspector={() => (setupInspectorCollapsed = !setupInspectorCollapsed)}
             onFieldChange={updateField}
             onGridChange={updateGrid}
             onInitialConditionChange={updateInitialCondition}

@@ -35,4 +35,4 @@
 <div
   bind:this={container}
   class="min-h-[520px] rounded-xl border border-border overflow-hidden"
-  style="background: linear-gradient(180deg, #0f1319 0%, #151a22 100%);"></div>
+  style="background: linear-gradient(180deg, #fbfdff 0%, #edf4fb 100%);"></div>
