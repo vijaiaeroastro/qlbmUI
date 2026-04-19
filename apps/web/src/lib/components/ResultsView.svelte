@@ -1,5 +1,4 @@
 <script>
-  import VtkResultsCanvas from "./VtkResultsCanvas.svelte";
   import CodeBlock from "./CodeBlock.svelte";
 
   export let run = null;
@@ -19,6 +18,8 @@
   function keepArtifact(item) {
     return interestingArtifacts.some((suffix) => item.path.endsWith(suffix));
   }
+
+  $: selectedArtifact = vtiArtifacts[selectedStepIndex] || null;
 </script>
 
 <div class="grid grid-cols-1 lg:grid-cols-[minmax(300px,380px)_1fr] gap-4 animate-fade-in">
@@ -138,10 +139,60 @@
   <!-- Right: visualization -->
   <section class="rounded-xl border border-border bg-surface-2 p-4 space-y-3 min-h-0">
     <div>
-      <h2 class="text-sm font-display font-bold text-ink">Visualization</h2>
-      <p class="mt-0.5 text-xs text-ink-faint">Timestep and geometry surface rendering.</p>
+      <h2 class="text-sm font-display font-bold text-ink">Inspection</h2>
+      <p class="mt-0.5 text-xs text-ink-faint">Artifact selection, metadata, and helper output without an in-app renderer.</p>
     </div>
 
-    <VtkResultsCanvas imageArtifact={vtiArtifacts[selectedStepIndex] || null} {geometryArtifacts} />
+    <div class="rounded-xl border border-border bg-surface-3/70 min-h-[520px] p-4 flex flex-col gap-4">
+      {#if selectedArtifact}
+        <div class="rounded-lg border border-border bg-surface-0 p-4 space-y-2">
+          <div class="text-[0.65rem] font-bold uppercase tracking-wider text-ink-faint">Selected timestep</div>
+          <div class="text-sm font-mono text-ink break-all">{selectedArtifact.path}</div>
+          <div class="text-xs text-ink-faint">Size: {selectedArtifact.size}B</div>
+          {#if selectedArtifact.url}
+            <a
+              class="inline-flex items-center rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors"
+              href={selectedArtifact.url}
+              target="_blank"
+              rel="noreferrer">
+              Open Artifact
+            </a>
+          {/if}
+        </div>
+      {:else}
+        <div class="rounded-lg border border-dashed border-border bg-surface-0/70 p-4 text-sm text-ink-faint">
+          No timestep artifact selected.
+        </div>
+      {/if}
+
+      <div class="rounded-lg border border-border bg-surface-0 p-4 space-y-2">
+        <div class="text-[0.65rem] font-bold uppercase tracking-wider text-ink-faint">Geometry artifacts</div>
+        {#if geometryArtifacts.length}
+          <div class="space-y-2">
+            {#each geometryArtifacts as item}
+              <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-3 px-3 py-2">
+                <div class="min-w-0">
+                  <div class="text-xs font-mono text-ink truncate">{item.path}</div>
+                  <div class="text-[0.65rem] text-ink-faint">{item.size}B</div>
+                </div>
+                <a
+                  class="rounded-md border border-accent/30 bg-accent/10 px-2.5 py-1 text-[0.7rem] font-semibold text-accent hover:bg-accent/20 transition-colors"
+                  href={item.url}
+                  target="_blank"
+                  rel="noreferrer">
+                  Open
+                </a>
+              </div>
+            {/each}
+          </div>
+        {:else}
+          <div class="text-xs text-ink-faint">No geometry artifacts detected.</div>
+        {/if}
+      </div>
+
+      <div class="rounded-lg border border-border bg-warn/5 px-4 py-3 text-xs text-warn/80">
+        In-app 3D/post-processing is currently disabled. Open saved artifacts externally or add a new renderer later.
+      </div>
+    </div>
   </section>
 </div>

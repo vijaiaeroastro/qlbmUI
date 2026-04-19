@@ -4,11 +4,12 @@
   export let code = "";
   export let language = "text";
   export let label = "";
+  export let fillHeight = false;
 
   $: highlighted = renderHighlightedCode(code, language);
 </script>
 
-<div class="rounded-xl border border-border overflow-hidden bg-surface-0 relative scanlines">
+<div class:code-block--fill={fillHeight} class="rounded-xl border border-border overflow-hidden bg-surface-0 relative scanlines">
   {#if label}
     <div class="flex items-center justify-between min-h-[34px] px-3 border-b border-border/60 bg-surface-1">
       <span class="text-[0.65rem] font-mono font-bold uppercase tracking-wider text-ink-faint">{label}</span>
@@ -18,6 +19,16 @@
 </div>
 
 <style>
+  .code-block--fill {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+  }
+  .code-block--fill pre {
+    flex: 1 1 auto;
+    min-height: 0;
+  }
   pre :global(.code-block__line) {
     display: grid;
     grid-template-columns: 48px minmax(0, 1fr);
@@ -46,6 +57,7 @@
     padding-right: 16px;
   }
   pre :global(.code-token.keyword) { color: #22d3ee; }
+  pre :global(.code-token.property) { color: #38bdf8; }
   pre :global(.code-token.string) { color: #34d399; }
   pre :global(.code-token.number) { color: #fbbf24; }
   pre :global(.code-token.comment) { color: #4a5568; font-style: italic; }

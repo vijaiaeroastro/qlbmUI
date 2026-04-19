@@ -41,6 +41,8 @@ const PYTHON_KEYWORDS = new Set([
   "yield"
 ]);
 
+const JSON_LITERALS = new Set(["true", "false", "null"]);
+
 function highlightPythonLine(line) {
   const escaped = escapeHtml(line);
   const tokens = [];
@@ -72,13 +74,48 @@ function highlightPythonLine(line) {
   return tokens.join("");
 }
 
+function highlightJsonLine(line) {
+  const tokens = [];
+  const pattern =
+    /"(?:[^"\\]|\\.)*"(?=\s*:)|"(?:[^"\\]|\\.)*"|\b-?\d+(?:\.\d+)?(?:[eE][+-]?\d+)?\b|\b(?:true|false|null)\b/g;
+
+  let lastIndex = 0;
+  for (const match of line.matchAll(pattern)) {
+    const token = match[0];
+    const index = match.index ?? 0;
+    tokens.push(escapeHtml(line.slice(lastIndex, index)));
+
+    const escapedToken = escapeHtml(token);
+    if (token.startsWith('"') && /^\s*:/.test(line.slice(index + token.length))) {
+      tokens.push(`<span class="code-token property">${escapedToken}</span>`);
+    } else if (token.startsWith('"')) {
+      tokens.push(`<span class="code-token string">${escapedToken}</span>`);
+    } else if (/^-?\d/.test(token)) {
+      tokens.push(`<span class="code-token number">${escapedToken}</span>`);
+    } else if (JSON_LITERALS.has(token)) {
+      tokens.push(`<span class="code-token keyword">${escapedToken}</span>`);
+    } else {
+      tokens.push(escapedToken);
+    }
+
+    lastIndex = index + token.length;
+  }
+
+  tokens.push(escapeHtml(line.slice(lastIndex)));
+  return tokens.join("");
+}
+
 export function renderHighlightedCode(source, language = "text") {
   const lines = (source || "").replace(/\t/g, "    ").split("\n");
 
   return lines
     .map((line, index) => {
       const content =
-        language === "python" ? highlightPythonLine(line) : escapeHtml(line || " ");
+        language === "python"
+          ? highlightPythonLine(line)
+          : language === "json"
+            ? highlightJsonLine(line)
+            : escapeHtml(line || " ");
       return `<div class="code-block__line"><span class="code-block__gutter">${index + 1}</span><span class="code-block__content">${content || "&nbsp;"}</span></div>`;
     })
     .join("");

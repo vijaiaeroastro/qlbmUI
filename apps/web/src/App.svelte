@@ -3,6 +3,7 @@
   import WorkspaceRail from "./lib/components/WorkspaceRail.svelte";
   import WorkspaceHeader from "./lib/components/WorkspaceHeader.svelte";
   import ConnectModal from "./lib/components/ConnectModal.svelte";
+  import CaseBuilderDrawer from "./lib/components/CaseBuilderDrawer.svelte";
   import RunsView from "./lib/components/RunsView.svelte";
   import SetupView from "./lib/components/SetupView.svelte";
   import ResultsView from "./lib/components/ResultsView.svelte";
@@ -33,7 +34,7 @@
   let helperHealthTimer = null;
   let currentStepIndex = 0;
   let isPlaying = false;
-  let setupInspectorCollapsed = false;
+  let setupDrawerOpen = true;
 
   $: generatedScript = generateQlBmScript(caseData);
   $: vtiArtifacts = currentArtifacts.filter((item) => item.path.endsWith(".vti"));
@@ -43,6 +44,15 @@
     if (viewId === "connect") {
       connectModalStep = helperConnected ? "connect" : "welcome";
       showConnectModal = true;
+      return;
+    }
+    if (viewId === "setup") {
+      if (currentView === "setup") {
+        setupDrawerOpen = !setupDrawerOpen;
+      } else {
+        setupDrawerOpen = true;
+        currentView = "setup";
+      }
       return;
     }
     currentView = viewId;
@@ -208,7 +218,7 @@
     stopPlayback();
     caseData = createDefaultCase();
     setupTab = "preview";
-    setupInspectorCollapsed = false;
+    setupDrawerOpen = true;
     currentView = "setup";
   }
 
@@ -408,13 +418,26 @@
   });
 </script>
 
-<div class="h-screen w-screen overflow-hidden bg-surface-0 p-2 md:p-3">
+  <div class="h-screen w-screen overflow-hidden bg-surface-0 p-2 md:p-3">
   <div class="h-full w-full overflow-hidden rounded-[30px] border border-border bg-surface-1/90 shadow-panel backdrop-blur-sm flex">
     <WorkspaceRail
       currentView={currentView}
       {helperConnected}
       currentRun={currentRun}
       onNavigate={navigateTo} />
+
+    {#if currentView === "setup" && setupDrawerOpen}
+      <CaseBuilderDrawer
+        {caseData}
+        onFieldChange={updateField}
+        onGridChange={updateGrid}
+        onInitialConditionChange={updateInitialCondition}
+        onSimulationChange={updateSimulation}
+        onAddObject={addObject}
+        onObjectChange={updateObject}
+        onDeleteObject={removeObject}
+        onClose={() => (setupDrawerOpen = false)} />
+    {/if}
 
     <main class="flex-1 flex flex-col min-w-0 min-h-0 bg-surface-0/45">
       <WorkspaceHeader
@@ -443,9 +466,7 @@
             {caseData}
             selectedTab={setupTab}
             {generatedScript}
-            inspectorCollapsed={setupInspectorCollapsed}
             onBack={() => (currentView = "runs")}
-            onToggleInspector={() => (setupInspectorCollapsed = !setupInspectorCollapsed)}
             onFieldChange={updateField}
             onGridChange={updateGrid}
             onInitialConditionChange={updateInitialCondition}

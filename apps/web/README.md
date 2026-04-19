@@ -6,7 +6,7 @@ Stack:
 
 - Svelte
 - Vite
-- vtk.js
+- DataViewer embed for QLBM preview
 
 ## Current scope
 
@@ -15,9 +15,7 @@ The first scaffold includes:
 - helper connection flow
 - run dashboard using the local helper API
 - readable setup editor shell
-- placeholder setup preview
-
-vtk.js integration is intentionally the next layer and will live under `src/lib/viewer`.
+- embedded QLBM setup preview
 
 ## Cloudflare Pages
 

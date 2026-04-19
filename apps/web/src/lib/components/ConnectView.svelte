@@ -79,6 +79,6 @@
 2. Copy the printed connection code
 3. Paste it here
 4. Browse saved runs or create a new setup
-5. Run locally and inspect results later with vtk.js</div>
+5. Run locally and inspect results later from the saved artifacts</div>
   </section>
 </div>
