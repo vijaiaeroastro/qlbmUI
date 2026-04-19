@@ -15,6 +15,7 @@
   let helperAddress = "";
   let helperConnected = false;
   let showConnectModal = true;
+  let connectModalStep = "welcome";
   let connectionCode = "";
   let manualAddress = "http://127.0.0.1:8712";
   let decodedAddress = "";
@@ -29,6 +30,7 @@
   let currentArtifacts = [];
   let pollTimer = null;
   let playbackTimer = null;
+  let helperHealthTimer = null;
   let currentStepIndex = 0;
   let isPlaying = false;
 
@@ -38,6 +40,7 @@
 
   function navigateTo(viewId) {
     if (viewId === "connect") {
+      connectModalStep = helperConnected ? "connect" : "welcome";
       showConnectModal = true;
       return;
     }
@@ -71,10 +74,13 @@
       helperAddress = normalized;
       helperConnected = true;
       showConnectModal = false;
+      connectModalStep = "connect";
       connectionNotice = "Connected";
+      startHelperHealthPolling();
       await refreshRuns();
     } catch (error) {
       helperConnected = false;
+      stopHelperHealthPolling();
       errorMessage = error.message;
     }
   }
@@ -93,11 +99,65 @@
       helperAddress = candidate;
       helperConnected = true;
       showConnectModal = false;
+      connectModalStep = "connect";
       connectionNotice = "Auto-connected";
+      startHelperHealthPolling();
       await refreshRuns();
     } catch {
+      stopHelperHealthPolling();
+      connectModalStep = "welcome";
       connectionNotice = "No local helper detected on default port";
     }
+  }
+
+  function showConnectForm() {
+    connectModalStep = "connect";
+    errorMessage = "";
+  }
+
+  function showInstallGuide() {
+    connectModalStep = "install";
+    errorMessage = "";
+  }
+
+  function stopHelperHealthPolling() {
+    if (helperHealthTimer) {
+      clearInterval(helperHealthTimer);
+      helperHealthTimer = null;
+    }
+  }
+
+  async function verifyHelperConnection() {
+    if (!helperAddress) {
+      return;
+    }
+
+    try {
+      await checkHealth(helperAddress);
+      if (!helperConnected) {
+        helperConnected = true;
+        connectionNotice = "Reconnected";
+      }
+    } catch {
+      helperConnected = false;
+      decodedAddress = "";
+      errorMessage = "The local helper is no longer reachable. Start it again or reconnect.";
+      connectionNotice = "Helper unavailable";
+      connectModalStep = "welcome";
+      showConnectModal = true;
+      stopHelperHealthPolling();
+    }
+  }
+
+  function startHelperHealthPolling() {
+    stopHelperHealthPolling();
+    if (!helperAddress || !helperConnected) {
+      return;
+    }
+
+    helperHealthTimer = setInterval(() => {
+      verifyHelperConnection();
+    }, 10000);
   }
 
   async function refreshRuns() {
@@ -338,6 +398,7 @@
   onDestroy(() => {
     clearTimeout(pollTimer);
     stopPlayback();
+    stopHelperHealthPolling();
   });
 
   onMount(() => {
@@ -413,11 +474,15 @@
 
   {#if showConnectModal}
     <ConnectModal
+      step={connectModalStep}
       {connectionCode}
       {manualAddress}
       {decodedAddress}
       {errorMessage}
       canClose={helperConnected}
+      onChooseExistingHelper={showConnectForm}
+      onChooseInstallHelper={showInstallGuide}
+      onBackToWelcome={() => (connectModalStep = "welcome")}
       onConnectionCodeInput={handleConnectionCodeInput}
       onManualAddressInput={handleManualAddressInput}
       onDecode={handleDecode}
