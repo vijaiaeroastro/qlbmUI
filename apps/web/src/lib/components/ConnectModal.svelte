@@ -130,13 +130,21 @@
             <div class="rounded-[20px] border border-border bg-white/85 p-4 shadow-sm">
               <div class="text-[0.72rem] font-semibold uppercase tracking-wider text-accent-strong">2. Start the helper</div>
               <p class="mt-3 text-sm text-ink-muted leading-relaxed">
-                The installer creates a launcher and prints the exact start command. The helper listens on
+                The installer adds a
+                <span class="inline-flex items-center px-2 py-0.5 mx-1 rounded-lg border border-border bg-surface-2 font-mono text-[0.82em] text-ink">
+                  qlbm-local-helper
+                </span>
+                command to your shell. The helper listens on
                 <span class="inline-flex items-center px-2 py-0.5 mx-1 rounded-lg border border-border bg-surface-2 font-mono text-[0.82em] text-ink">
                   127.0.0.1:8712
                 </span>
                 by default.
               </p>
               <p class="mt-2 text-xs text-ink-faint">
+                Open a new terminal if needed, then run
+                <span class="inline-flex items-center px-2 py-0.5 mx-1 rounded-lg border border-border bg-surface-2 font-mono text-[0.82em] text-ink">
+                  qlbm-local-helper
+                </span>.
                 Run the same installer again later if you want to upgrade, reinstall, or remove the helper.
               </p>
             </div>

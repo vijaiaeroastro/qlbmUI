@@ -10,12 +10,15 @@
   import ResultsView from "./lib/components/ResultsView.svelte";
   import { decodeConnectionCode } from "./lib/domain/connection.js";
   import { createDefaultCase } from "./lib/domain/defaultCase.js";
+  import { helperVersionNotice as buildHelperVersionNotice } from "./lib/domain/helperVersion.js";
   import { generateQlBmScript } from "./lib/domain/scriptGenerator.js";
   import { artifactUrl, checkHealth, createRun, deleteAllRuns, deleteRun, deleteRuns, getRun, listArtifacts, listRuns, normalizeBaseUrl } from "./lib/api/helperClient.js";
 
   let currentView = "runs";
   let helperAddress = "";
   let helperConnected = false;
+  let helperVersion = "";
+  let helperVersionWarning = "";
   let showConnectModal = true;
   let connectModalStep = "welcome";
   let connectionCode = "";
@@ -229,6 +232,11 @@
     runLaunchState = null;
   }
 
+  function updateHelperVersionState(health) {
+    helperVersion = typeof health?.version === "string" ? health.version : "";
+    helperVersionWarning = buildHelperVersionNotice(helperVersion);
+  }
+
   function navigateTo(viewId) {
     if (viewId === "connect") {
       connectModalStep = helperConnected ? "connect" : "welcome";
@@ -268,19 +276,23 @@
     }
   }
 
+  async function connectToHelper(targetAddress, notice = "Connected") {
+    const normalized = normalizeBaseUrl(targetAddress);
+    const health = await checkHealth(normalized);
+    helperAddress = normalized;
+    helperConnected = true;
+    updateHelperVersionState(health);
+    showConnectModal = false;
+    connectModalStep = "connect";
+    connectionNotice = notice;
+    startHelperHealthPolling();
+    await refreshRuns();
+  }
+
   async function handleConnect() {
     errorMessage = "";
     try {
-      const targetAddress = decodedAddress || manualAddress;
-      const normalized = normalizeBaseUrl(targetAddress);
-      await checkHealth(normalized);
-      helperAddress = normalized;
-      helperConnected = true;
-      showConnectModal = false;
-      connectModalStep = "connect";
-      connectionNotice = "Connected";
-      startHelperHealthPolling();
-      await refreshRuns();
+      await connectToHelper(decodedAddress || manualAddress, "Connected");
     } catch (error) {
       helperConnected = false;
       stopHelperHealthPolling();
@@ -298,14 +310,7 @@
   async function autoConnectIfAvailable() {
     const candidate = normalizeBaseUrl(manualAddress);
     try {
-      await checkHealth(candidate);
-      helperAddress = candidate;
-      helperConnected = true;
-      showConnectModal = false;
-      connectModalStep = "connect";
-      connectionNotice = "Auto-connected";
-      startHelperHealthPolling();
-      await refreshRuns();
+      await connectToHelper(candidate, "Auto-connected");
     } catch {
       stopHelperHealthPolling();
       connectModalStep = "welcome";
@@ -313,9 +318,18 @@
     }
   }
 
-  function showConnectForm() {
-    connectModalStep = "connect";
+  async function showConnectForm() {
+    const candidate = normalizeBaseUrl("http://127.0.0.1:8712");
+    decodedAddress = "";
     errorMessage = "";
+
+    try {
+      manualAddress = candidate;
+      await connectToHelper(candidate, "Connected on default port");
+    } catch {
+      connectModalStep = "connect";
+      errorMessage = `Nothing responded at ${candidate}. Paste a connection code or enter another helper address.`;
+    }
   }
 
   function showInstallGuide() {
@@ -336,13 +350,16 @@
     }
 
     try {
-      await checkHealth(helperAddress);
+      const health = await checkHealth(helperAddress);
+      updateHelperVersionState(health);
       if (!helperConnected) {
         helperConnected = true;
         connectionNotice = "Reconnected";
       }
     } catch {
       helperConnected = false;
+      helperVersion = "";
+      helperVersionWarning = "";
       decodedAddress = "";
       errorMessage = "The local helper is no longer reachable. Start it again or reconnect.";
       connectionNotice = "Helper unavailable";
@@ -660,6 +677,7 @@
         {helperAddress}
         {helperConnected}
         {connectionNotice}
+        helperVersionNotice={helperVersionWarning}
         currentRun={currentRun}
         timestepCount={vtiArtifacts.length}
         onNavigate={navigateTo} />

@@ -56,14 +56,28 @@ export function generateQlBmScript(caseData) {
 import os
 
 from qiskit_aer import AerSimulator
-from qlbm.components import EmptyPrimitive, GridMeasurement, MSInitialConditions, MSQLBM
-from qlbm.infra.runner import QiskitRunner, SimulationConfig
-from qlbm.lattice import MSLattice
+
+try:
+    from qlbm.components import EmptyPrimitive, GridMeasurement, MSInitialConditions, MSQLBM
+    from qlbm.infra.runner import QiskitRunner, SimulationConfig
+    from qlbm.lattice import MSLattice
+
+    lattice_factory = MSLattice
+    initial_conditions_factory = MSInitialConditions
+    algorithm_factory = MSQLBM
+except ImportError:
+    from qlbm.components import CQLBM, CollisionlessInitialConditions, EmptyPrimitive, GridMeasurement
+    from qlbm.infra import QiskitRunner, SimulationConfig
+    from qlbm.lattice import CollisionlessLattice
+
+    lattice_factory = CollisionlessLattice
+    initial_conditions_factory = CollisionlessInitialConditions
+    algorithm_factory = CQLBM
 
 output_dir = Path(os.environ["QLBM_OUTPUT_DIR"])
 output_dir.mkdir(parents=True, exist_ok=True)
 
-lattice = MSLattice(
+lattice = lattice_factory(
     {
         "lattice": {${latticeDimensionBlock(caseData)}, ${latticeVelocityBlock(caseData)}},
         "geometry": [
@@ -73,8 +87,8 @@ ${geometry || "            "}
 )
 
 cfg = SimulationConfig(
-    initial_conditions=MSInitialConditions(lattice),
-    algorithm=MSQLBM(lattice),
+    initial_conditions=initial_conditions_factory(lattice),
+    algorithm=algorithm_factory(lattice),
     postprocessing=EmptyPrimitive(lattice),
     measurement=GridMeasurement(lattice),
     target_platform="QISKIT",

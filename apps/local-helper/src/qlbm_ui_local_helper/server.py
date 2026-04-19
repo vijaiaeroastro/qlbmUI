@@ -8,6 +8,7 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+from . import __version__
 from .run_manager import RunManager, connection_code
 
 
@@ -25,7 +26,12 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
         if path == "/health":
             self._send_json(
                 HTTPStatus.OK,
-                {"ok": True, "service": "qlbm-local-helper", "runs_dir": str(self.manager.runs_root)},
+                {
+                    "ok": True,
+                    "service": "qlbm-local-helper",
+                    "version": __version__,
+                    "runs_dir": str(self.manager.runs_root),
+                },
             )
             return
 

@@ -3,6 +3,7 @@
   export let helperConnected = false;
   export let helperAddress = "";
   export let connectionNotice = "";
+  export let helperVersionNotice = "";
   export let currentRun = null;
   export let timestepCount = 0;
   export let onNavigate;
@@ -39,6 +40,12 @@
     {#if connectionNotice}
       <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-surface-2 border border-border text-[0.7rem] text-ink-muted font-mono">
         {connectionNotice}
+      </span>
+    {/if}
+
+    {#if helperVersionNotice}
+      <span class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-warn/20 bg-warn/10 text-[0.7rem] text-warn font-mono">
+        {helperVersionNotice}
       </span>
     {/if}
 

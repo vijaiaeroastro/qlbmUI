@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -21,6 +22,8 @@ from pathlib import Path
 
 REPO_ARCHIVE_URL = "https://github.com/vijaiaeroastro/qlbmUI/archive/refs/heads/main.zip"
 INSTALL_DIR_NAME = "qlbm-ui-local-helper"
+PATH_BLOCK_BEGIN = "# >>> qlbm-local-helper >>>"
+PATH_BLOCK_END = "# <<< qlbm-local-helper <<<"
 
 
 def default_install_dir() -> Path:
@@ -56,6 +59,22 @@ def launcher_path(install_dir: Path) -> Path:
     if sys.platform.startswith("win"):
         return install_dir / "start-qlbm-local-helper.bat"
     return install_dir / "start-qlbm-local-helper.sh"
+
+
+def launcher_name() -> str:
+    if sys.platform.startswith("win"):
+        return "start-qlbm-local-helper.bat"
+    return "start-qlbm-local-helper.sh"
+
+
+def command_name() -> str:
+    if sys.platform.startswith("win"):
+        return "qlbm-local-helper.cmd"
+    return "qlbm-local-helper"
+
+
+def command_path(install_dir: Path) -> Path:
+    return install_dir / command_name()
 
 
 def installation_exists(install_dir: Path) -> bool:
@@ -159,6 +178,159 @@ def write_launcher(install_dir: Path, python_path: Path) -> Path:
     return launcher
 
 
+def write_command_launcher(install_dir: Path, python_path: Path) -> Path:
+    command = command_path(install_dir)
+    if sys.platform.startswith("win"):
+        command.write_text(
+            textwrap.dedent(
+                f"""\
+                @echo off
+                "{python_path}" -m qlbm_ui_local_helper.server %*
+                """
+            ),
+            encoding="utf-8",
+        )
+        return command
+
+    command.write_text(
+        textwrap.dedent(
+            f"""\
+            #!/usr/bin/env bash
+            "{python_path}" -m qlbm_ui_local_helper.server "$@"
+            """
+        ),
+        encoding="utf-8",
+    )
+    command.chmod(0o755)
+    return command
+
+
+def remove_companion_launcher(script_dir: Path) -> None:
+    companion = script_dir / launcher_name()
+    if companion.exists():
+        companion.unlink()
+
+
+def shell_rc_files() -> list[Path]:
+    files = [Path.home() / ".bashrc", Path.home() / ".zshrc"]
+    if sys.platform == "darwin":
+        files.append(Path.home() / ".zprofile")
+    return files
+
+
+def path_block(install_dir: Path) -> str:
+    escaped_path = str(install_dir).replace('"', '\\"')
+    return "\n".join(
+        [
+            PATH_BLOCK_BEGIN,
+            f'export PATH="{escaped_path}:$PATH"',
+            PATH_BLOCK_END,
+        ]
+    )
+
+
+def replace_managed_block(text: str, block: str | None) -> str:
+    pattern = re.compile(
+        rf"\n?{re.escape(PATH_BLOCK_BEGIN)}\n.*?\n{re.escape(PATH_BLOCK_END)}\n?",
+        re.DOTALL,
+    )
+    cleaned = re.sub(pattern, "\n", text).rstrip()
+    if block is None:
+        return f"{cleaned}\n" if cleaned else ""
+    if cleaned:
+        return f"{cleaned}\n\n{block}\n"
+    return f"{block}\n"
+
+
+def configure_unix_path(install_dir: Path) -> None:
+    block = path_block(install_dir)
+    for rc_file in shell_rc_files():
+        existing = rc_file.read_text(encoding="utf-8") if rc_file.exists() else ""
+        rc_file.write_text(replace_managed_block(existing, block), encoding="utf-8")
+
+
+def remove_unix_path() -> None:
+    for rc_file in shell_rc_files():
+        if not rc_file.exists():
+            continue
+        existing = rc_file.read_text(encoding="utf-8")
+        updated = replace_managed_block(existing, None)
+        if updated:
+            rc_file.write_text(updated, encoding="utf-8")
+        else:
+            rc_file.unlink()
+
+
+def broadcast_windows_environment_change() -> None:
+    try:
+        import ctypes
+
+        HWND_BROADCAST = 0xFFFF
+        WM_SETTINGCHANGE = 0x001A
+        SMTO_ABORTIFHUNG = 0x0002
+        ctypes.windll.user32.SendMessageTimeoutW(
+            HWND_BROADCAST,
+            WM_SETTINGCHANGE,
+            0,
+            "Environment",
+            SMTO_ABORTIFHUNG,
+            5000,
+            None,
+        )
+    except Exception:
+        pass
+
+
+def get_windows_user_path_entries() -> list[str]:
+    import winreg
+
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            value, _ = winreg.QueryValueEx(key, "Path")
+    except FileNotFoundError:
+        return []
+    except OSError:
+        return []
+
+    return [entry for entry in str(value).split(";") if entry]
+
+
+def set_windows_user_path_entries(entries: list[str]) -> None:
+    import winreg
+
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+        winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, ";".join(entries))
+    broadcast_windows_environment_change()
+
+
+def configure_windows_path(install_dir: Path) -> None:
+    install_value = str(install_dir)
+    entries = get_windows_user_path_entries()
+    if install_value.lower() not in {entry.lower() for entry in entries}:
+        entries.append(install_value)
+        set_windows_user_path_entries(entries)
+
+
+def remove_windows_path(install_dir: Path) -> None:
+    install_value = str(install_dir).lower()
+    entries = [entry for entry in get_windows_user_path_entries() if entry.lower() != install_value]
+    set_windows_user_path_entries(entries)
+
+
+def configure_command_path(install_dir: Path) -> None:
+    if sys.platform.startswith("win"):
+        configure_windows_path(install_dir)
+    else:
+        configure_unix_path(install_dir)
+
+
+def remove_command_path(install_dir: Path) -> None:
+    if sys.platform.startswith("win"):
+        remove_windows_path(install_dir)
+    else:
+        remove_unix_path()
+
+
 def remove_installation(install_dir: Path) -> None:
     if not install_dir.exists():
         print(f"No helper installation found in {install_dir}")
@@ -170,7 +342,7 @@ def remove_installation(install_dir: Path) -> None:
     print(f"Removed: {install_dir}")
 
 
-def install_helper(install_dir: Path, *, force_reinstall: bool) -> Path:
+def install_helper(install_dir: Path, *, force_reinstall: bool) -> tuple[Path, Path]:
     install_dir.mkdir(parents=True, exist_ok=True)
 
     with tempfile.TemporaryDirectory(prefix="qlbm-ui-helper-") as temp_name:
@@ -188,7 +360,9 @@ def install_helper(install_dir: Path, *, force_reinstall: bool) -> Path:
         pip_install_cmd.append(str(helper_dir))
         run(pip_install_cmd)
 
-        return write_launcher(install_dir, python_path)
+        launcher = write_launcher(install_dir, python_path)
+        command = write_command_launcher(install_dir, python_path)
+        return launcher, command
 
 
 def main() -> int:
@@ -207,6 +381,7 @@ def main() -> int:
         return 1
 
     install_dir = choose_install_dir(args)
+    script_dir = Path(__file__).resolve().parent
     action = choose_existing_install_action(args, install_dir)
 
     if action == "cancel":
@@ -214,7 +389,9 @@ def main() -> int:
         return 0
 
     if action == "remove":
+        remove_command_path(install_dir)
         remove_installation(install_dir)
+        remove_companion_launcher(script_dir)
         return 0
 
     if action == "install" and installation_exists(install_dir):
@@ -226,7 +403,9 @@ def main() -> int:
     if action == "reinstall" and install_dir.exists():
         shutil.rmtree(install_dir)
 
-    launcher = install_helper(install_dir, force_reinstall=action in {"upgrade", "reinstall"})
+    launcher, command = install_helper(install_dir, force_reinstall=action in {"upgrade", "reinstall"})
+    configure_command_path(install_dir)
+    remove_companion_launcher(script_dir)
 
     print()
     if action == "upgrade":
@@ -237,11 +416,16 @@ def main() -> int:
         print("qlbm local helper installed successfully.")
     print(f"Install directory: {install_dir}")
     print(f"Launcher: {launcher}")
+    print(f"Command: {command}")
     print()
     print("Start the helper with:")
-    print(f"  {launcher}")
+    print("  qlbm-local-helper")
     print()
     print("The helper listens on http://127.0.0.1:8712 by default.")
+    if sys.platform.startswith("win"):
+        print("You may need to open a new terminal for the PATH update to appear.")
+    else:
+        print("You may need to open a new terminal or run: source ~/.bashrc or source ~/.zshrc")
     print("Rerun this installer later to upgrade, reinstall, or remove the helper.")
     return 0
 

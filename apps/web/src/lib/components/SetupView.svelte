@@ -223,11 +223,12 @@
 
   $: gridPresets = wizard.dimension === "3D"
     ? [
-        { label: "24 × 24 × 12", values: { x: 24, y: 24, z: 12 } },
-        { label: "32 × 32 × 16", values: { x: 32, y: 32, z: 16 } },
-        { label: "48 × 48 × 24", values: { x: 48, y: 48, z: 24 } }
+        { label: "8 × 8 × 8", values: { x: 8, y: 8, z: 8 } },
+        { label: "16 × 16 × 16", values: { x: 16, y: 16, z: 16 } },
+        { label: "32 × 32 × 32", values: { x: 32, y: 32, z: 32 } }
       ]
     : [
+        { label: "8 × 8", values: { x: 8, y: 8 } },
         { label: "16 × 16", values: { x: 16, y: 16 } },
         { label: "32 × 32", values: { x: 32, y: 32 } },
         { label: "64 × 64", values: { x: 64, y: 64 } }
@@ -236,13 +237,11 @@
   $: starterObstacleChoices = wizard.dimension === "3D"
     ? [
         { value: "none", label: "No obstacle", description: "Start with a clean domain." },
-        { value: "cuboid", label: "Cube", description: "Add one centered solid cube.", available: true },
-        { value: "sphere", label: "Sphere", description: "Coming later.", available: false }
+        { value: "cuboid", label: "Cube", description: "Add one centered solid cube." }
       ]
     : [
         { value: "none", label: "No obstacle", description: "Start with a clean domain." },
-        { value: "cuboid", label: "Square", description: "Add one centered square obstacle.", available: true },
-        { value: "sphere", label: "Circle", description: "Coming later.", available: false }
+        { value: "cuboid", label: "Square", description: "Add one centered square obstacle." }
       ];
 
   $: summaryRows = [
@@ -498,7 +497,7 @@
                       </div>
                       <div class="mt-5 text-xl font-display font-bold text-ink">2D Case</div>
                       <p class="mt-2 text-sm leading-relaxed text-ink-muted">
-                        Flat-lattice setup with square obstacles and generated Python ready to run.
+                        Flat-lattice setup with square obstacles, generated Python, and VTI output ready to run.
                       </p>
                     </button>
 
@@ -515,7 +514,7 @@
                       </div>
                       <div class="mt-5 text-xl font-display font-bold text-ink">3D Case</div>
                       <p class="mt-2 text-sm leading-relaxed text-ink-muted">
-                        Full 3D setup with cube obstacles and generated Python ready to run.
+                        Full 3D setup with cube obstacles, generated Python, and VTI output ready to run.
                       </p>
                     </button>
                   </div>
@@ -548,6 +547,10 @@
                           </button>
                         {/each}
                       </div>
+
+                      <p class="text-xs text-ink-faint">
+                        For the current demo path, keep each lattice axis on powers of two.
+                      </p>
 
                       <div class="grid max-w-3xl grid-cols-2 gap-3 md:grid-cols-3">
                         <label class="space-y-1.5">
@@ -736,17 +739,9 @@
                     {#each starterObstacleChoices as choice}
                       <button
                         type="button"
-                        disabled={choice.available === false}
-                        class="rounded-[24px] border p-5 text-left transition-all {choice.available === false ? 'cursor-not-allowed opacity-65' : 'cursor-pointer'} {wizardCardClass(wizard.starterObstacle === choice.value && choice.available !== false)}"
-                        on:click={() => choice.available !== false && setStarterObstacle(choice.value)}>
-                        <div class="flex items-start justify-between gap-3">
-                          <div class="text-lg font-display font-bold text-ink">{choice.label}</div>
-                          {#if choice.available === false}
-                            <span class="rounded-full border border-border bg-surface-2 px-2.5 py-1 text-[0.62rem] font-mono font-bold uppercase tracking-[0.16em] text-ink-faint">
-                              Coming later
-                            </span>
-                          {/if}
-                        </div>
+                        class="rounded-[24px] border p-5 text-left transition-all cursor-pointer {wizardCardClass(wizard.starterObstacle === choice.value)}"
+                        on:click={() => setStarterObstacle(choice.value)}>
+                        <div class="text-lg font-display font-bold text-ink">{choice.label}</div>
                         <p class="mt-2 text-sm leading-relaxed text-ink-muted">{choice.description}</p>
                       </button>
                     {/each}
