@@ -25,7 +25,7 @@ export function createDefaultCase() {
       directions: ["E"],
       region: { xMin: 0, xMax: 3, yMin: 0, yMax: 15, zMin: 0, zMax: 0 }
     },
-    objects: [makeObject(1, "cuboid")],
+    objects: [],
     simulation: {
       timeSteps: 5,
       shots: 256

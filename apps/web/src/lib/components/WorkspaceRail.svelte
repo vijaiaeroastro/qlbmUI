@@ -14,10 +14,15 @@
 <aside class="w-56 flex-shrink-0 border-r border-border bg-surface-1/55 flex flex-col items-stretch py-5 px-4 gap-5">
   <!-- Brand -->
   <button
-    class="group flex flex-col items-start gap-1 cursor-pointer bg-transparent border-0 p-1 text-left"
+    class="group flex items-center gap-3 cursor-pointer bg-transparent border-0 p-1 text-left"
     on:click={() => onNavigate("runs")}>
-    <span class="text-[0.62rem] font-mono uppercase tracking-[0.18em] text-ink-faint group-hover:text-ink-muted transition-colors">qlbm workstation</span>
-    <span class="text-[1.55rem] font-display font-bold text-ink leading-none">UI</span>
+    <img
+      src="/logo.png"
+      alt="QLBM logo"
+      class="h-12 w-12 rounded-xl border border-border bg-surface-0 object-contain shadow-sm" />
+    <span class="flex min-w-0 flex-col items-start gap-1">
+      <span class="text-[0.72rem] font-mono uppercase tracking-[0.18em] text-ink-faint group-hover:text-ink-muted transition-colors">QLBM Workstation</span>
+    </span>
   </button>
 
   <!-- Connection indicator -->

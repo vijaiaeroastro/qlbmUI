@@ -12,6 +12,7 @@
   let destroyed = false;
   let ready = false;
   let lastHighlight = null;
+  let lastCaseSignature = "";
   let errorMessage = "";
 
   async function waitForEmbedApi() {
@@ -54,11 +55,16 @@
     if (!ready || !viewer?.qlbm || !caseData) return;
     try {
       const doc = caseToQlbmDoc(caseData);
+      const signature = JSON.stringify(doc);
+      if (!fit && signature === lastCaseSignature) return;
+      lastCaseSignature = signature;
       viewer.qlbm.setCase(doc, { fit });
+      errorMessage = "";
     } catch (error) {
       errorMessage = `Failed to push case: ${error.message}`;
     }
   }
+
 
   function applyHighlight() {
     if (!ready || !viewer?.qlbm) return;
@@ -88,6 +94,7 @@
       // ignore teardown errors
     }
     viewer = null;
+    lastCaseSignature = "";
   });
 
   $: if (ready && caseData) pushCase(false);
