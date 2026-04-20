@@ -179,9 +179,13 @@ class LocalHelperHandler(BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _set_cors_headers(self) -> None:
-        self.send_header("Access-Control-Allow-Origin", "*")
+        origin = self.headers.get("Origin")
+        self.send_header("Access-Control-Allow-Origin", origin or "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, DELETE, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+        request_headers = self.headers.get("Access-Control-Request-Headers")
+        self.send_header("Access-Control-Allow-Headers", request_headers or "Content-Type")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self.send_header("Vary", "Origin, Access-Control-Request-Headers, Access-Control-Request-Private-Network")
 
 
 def main() -> None:

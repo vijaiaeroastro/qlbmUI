@@ -708,7 +708,6 @@
         {:else}
           <ResultsView
             run={currentRun}
-            artifacts={currentArtifacts}
             {vtiArtifacts}
             {geometryArtifacts}
             selectedStepIndex={currentStepIndex}

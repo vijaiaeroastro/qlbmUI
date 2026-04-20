@@ -1,8 +1,8 @@
 <script>
   import CodeBlock from "./CodeBlock.svelte";
+  import ResultsEmbeddedViewer from "./ResultsEmbeddedViewer.svelte";
 
   export let run = null;
-  export let artifacts = [];
   export let vtiArtifacts = [];
   export let geometryArtifacts = [];
   export let selectedStepIndex = 0;
@@ -13,16 +13,13 @@
   export let onTogglePlayback;
   export let onStepDelta;
 
-  const interestingArtifacts = ["lattice.json", ".vti", ".stl"];
-
-  function keepArtifact(item) {
-    return interestingArtifacts.some((suffix) => item.path.endsWith(suffix));
-  }
-
   $: selectedArtifact = vtiArtifacts[selectedStepIndex] || null;
+  $: timestepCount = vtiArtifacts.length;
+  $: obstacleCount = geometryArtifacts.length;
+  $: resultsDimension = run?.case_data?.dimension || run?.case?.dimension || null;
 </script>
 
-<div class="grid grid-cols-1 lg:grid-cols-[minmax(300px,380px)_1fr] gap-4 animate-fade-in">
+<div class="grid h-full min-h-0 grid-cols-1 gap-4 animate-fade-in lg:grid-cols-[minmax(300px,360px)_1fr]">
   <!-- Left panel: run info -->
   <section class="rounded-xl border border-border bg-surface-2 p-4 space-y-4 overflow-auto max-h-[calc(100vh-8rem)]">
     <div class="flex gap-2">
@@ -64,6 +61,24 @@
             <span class="text-xs font-mono text-ink-muted truncate max-w-[200px]">{value}</span>
           </div>
         {/each}
+      </div>
+
+      <!-- Dataset summary -->
+      <div class="space-y-2">
+        <h3 class="text-xs font-display font-bold text-ink">Dataset</h3>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="rounded-lg border border-border bg-surface-3 p-3">
+            <span class="block text-[0.6rem] font-bold uppercase tracking-widest text-ink-faint mb-1">Timesteps</span>
+            <strong class="text-base font-mono text-ink">{timestepCount}</strong>
+          </div>
+          <div class="rounded-lg border border-border bg-surface-3 p-3">
+            <span class="block text-[0.6rem] font-bold uppercase tracking-widest text-ink-faint mb-1">Obstacles</span>
+            <strong class="text-base font-mono text-ink">{obstacleCount}</strong>
+          </div>
+        </div>
+        <p class="text-xs text-ink-faint">
+          The viewer loads the active timestep together with the exported obstacle geometry.
+        </p>
       </div>
 
       <!-- Playback controls -->
@@ -115,19 +130,6 @@
         {/if}
       </div>
 
-      <!-- Artifacts list -->
-      <div class="space-y-2">
-        <h3 class="text-xs font-display font-bold text-ink">Artifacts</h3>
-        <div class="space-y-1.5">
-          {#each artifacts.filter(keepArtifact) as item}
-            <div class="flex items-center justify-between gap-2 px-3 py-2 rounded-lg border border-border bg-surface-3">
-              <span class="text-xs font-mono text-ink truncate">{item.path}</span>
-              <span class="text-[0.65rem] text-ink-faint font-mono whitespace-nowrap">{item.size}B</span>
-            </div>
-          {/each}
-        </div>
-      </div>
-
       <!-- stdout -->
       <div class="space-y-2">
         <h3 class="text-xs font-display font-bold text-ink">stdout</h3>
@@ -137,61 +139,28 @@
   </section>
 
   <!-- Right: visualization -->
-  <section class="rounded-xl border border-border bg-surface-2 p-4 space-y-3 min-h-0">
-    <div>
-      <h2 class="text-sm font-display font-bold text-ink">Inspection</h2>
-      <p class="mt-0.5 text-xs text-ink-faint">Artifact selection, metadata, and helper output without an in-app renderer.</p>
-    </div>
-
-    <div class="rounded-xl border border-border bg-surface-3/70 min-h-[520px] p-4 flex flex-col gap-4">
+  <section class="rounded-xl border border-border bg-surface-2 p-4 space-y-3 min-h-0 flex flex-col">
+    <div class="flex flex-wrap items-start justify-between gap-3">
+      <div>
+        <h2 class="text-sm font-display font-bold text-ink">Post-processing</h2>
+        <p class="mt-0.5 text-xs text-ink-faint">Active timestep `.vti` with obstacle `.stl` geometry layered into the same viewer.</p>
+      </div>
       {#if selectedArtifact}
-        <div class="rounded-lg border border-border bg-surface-0 p-4 space-y-2">
-          <div class="text-[0.65rem] font-bold uppercase tracking-wider text-ink-faint">Selected timestep</div>
-          <div class="text-sm font-mono text-ink break-all">{selectedArtifact.path}</div>
-          <div class="text-xs text-ink-faint">Size: {selectedArtifact.size}B</div>
-          {#if selectedArtifact.url}
-            <a
-              class="inline-flex items-center rounded-lg border border-accent/30 bg-accent/10 px-3 py-1.5 text-xs font-semibold text-accent hover:bg-accent/20 transition-colors"
-              href={selectedArtifact.url}
-              target="_blank"
-              rel="noreferrer">
-              Open Artifact
-            </a>
-          {/if}
-        </div>
-      {:else}
-        <div class="rounded-lg border border-dashed border-border bg-surface-0/70 p-4 text-sm text-ink-faint">
-          No timestep artifact selected.
+        <div class="rounded-lg border border-border bg-surface-3 px-3 py-2 text-right">
+          <div class="text-[0.62rem] font-mono font-bold uppercase tracking-[0.16em] text-ink-faint">Active timestep</div>
+          <div class="mt-1 text-xs font-mono text-ink">{selectedArtifact.path}</div>
         </div>
       {/if}
+    </div>
 
-      <div class="rounded-lg border border-border bg-surface-0 p-4 space-y-2">
-        <div class="text-[0.65rem] font-bold uppercase tracking-wider text-ink-faint">Geometry artifacts</div>
-        {#if geometryArtifacts.length}
-          <div class="space-y-2">
-            {#each geometryArtifacts as item}
-              <div class="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface-3 px-3 py-2">
-                <div class="min-w-0">
-                  <div class="text-xs font-mono text-ink truncate">{item.path}</div>
-                  <div class="text-[0.65rem] text-ink-faint">{item.size}B</div>
-                </div>
-                <a
-                  class="rounded-md border border-accent/30 bg-accent/10 px-2.5 py-1 text-[0.7rem] font-semibold text-accent hover:bg-accent/20 transition-colors"
-                  href={item.url}
-                  target="_blank"
-                  rel="noreferrer">
-                  Open
-                </a>
-              </div>
-            {/each}
-          </div>
-        {:else}
-          <div class="text-xs text-ink-faint">No geometry artifacts detected.</div>
-        {/if}
-      </div>
-
-      <div class="rounded-lg border border-border bg-warn/5 px-4 py-3 text-xs text-warn/80">
-        In-app 3D/post-processing is currently disabled. Open saved artifacts externally or add a new renderer later.
+    <div class="rounded-xl border border-border bg-surface-3/70 p-4 flex-1 min-h-[620px]">
+      <div class="h-full w-full">
+        <ResultsEmbeddedViewer
+          {vtiArtifacts}
+          {geometryArtifacts}
+          {selectedStepIndex}
+          {resultsDimension}
+          theme="light" />
       </div>
     </div>
   </section>
