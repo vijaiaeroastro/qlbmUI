@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -193,6 +194,7 @@ class RunManager:
         env = os.environ.copy()
         env["QLBM_RUN_DIR"] = str(record.root_dir)
         env["QLBM_OUTPUT_DIR"] = str(record.root_dir / "output")
+        env.setdefault("SAMPLOMATIC_SUPPRESS_BETA_WARNING", "1")
 
         self._write_status(
             record,
@@ -259,11 +261,14 @@ class RunManager:
                 return
 
         final_status = "completed" if returncode == 0 else "failed"
-        final_message = (
-            "Run completed successfully."
-            if returncode == 0
-            else f"Run exited with return code {returncode}."
-        )
+        failure_summary = None
+        failure_hint = None
+        final_message = "Run completed successfully."
+
+        if final_status == "failed":
+            failure_summary, failure_hint = self._classify_failure(record, returncode)
+            final_message = failure_summary or f"Run exited with return code {returncode}."
+
         self._write_status(
             record,
             {
@@ -271,6 +276,8 @@ class RunManager:
                 "status": final_status,
                 "returncode": returncode,
                 "finished_at": time.time(),
+                **({"failure_summary": failure_summary} if failure_summary else {}),
+                **({"failure_hint": failure_hint} if failure_hint else {}),
                 "progress": self._progress_payload(
                     stage=final_status,
                     message=final_message,
@@ -370,6 +377,48 @@ class RunManager:
             "message": message,
             "percent": max(0, min(100, int(percent))),
         }
+
+    def _classify_failure(self, record: RunRecord, returncode: int) -> tuple[str | None, str | None]:
+        stderr_text = self._tail(record.stderr_path, max_chars=12000)
+        stdout_text = self._tail(record.stdout_path, max_chars=12000)
+        combined = "\n".join(part for part in [stderr_text, stdout_text] if part).strip()
+
+        if not combined:
+            return (f"Run exited with return code {returncode}.", None)
+
+        missing_module = re.search(r"ModuleNotFoundError:\s+No module named ['\"]([^'\"]+)['\"]", combined)
+        if missing_module:
+            module_name = missing_module.group(1)
+            return (
+                f"Missing Python dependency: {module_name}",
+                f"Install {module_name} in the Python environment used by qlbm-local-helper, then rerun the case.",
+            )
+
+        import_error = re.search(
+            r"ImportError:\s+cannot import name ['\"]([^'\"]+)['\"] from ['\"]([^'\"]+)['\"]",
+            combined,
+        )
+        if import_error:
+            symbol_name = import_error.group(1)
+            module_name = import_error.group(2)
+            return (
+                f"Incompatible Python package import: {symbol_name} from {module_name}",
+                "The local helper environment likely has incompatible package versions. Upgrade or reinstall the helper environment and try again.",
+            )
+
+        permission_error = re.search(r"PermissionError:\s*(.+)", combined)
+        if permission_error:
+            return (
+                f"Permission error: {permission_error.group(1).strip()}",
+                "Check file and directory permissions for the helper runs folder and the selected Python environment.",
+            )
+
+        traceback_lines = [line.strip() for line in combined.splitlines() if line.strip()]
+        for line in reversed(traceback_lines):
+            if line.startswith(("ModuleNotFoundError:", "ImportError:", "ValueError:", "RuntimeError:", "TypeError:", "AssertionError:", "KeyError:", "FileNotFoundError:", "PermissionError:")):
+                return (line, None)
+
+        return (f"Run exited with return code {returncode}.", None)
 
     def _default_progress_message(self, status: str) -> str:
         messages = {

@@ -382,7 +382,7 @@
   }
 </script>
 
-<div class="h-full flex flex-col gap-3 animate-fade-in min-h-0">
+<div class="{needsDimensionChoice ? 'min-h-full' : 'h-full min-h-0'} flex flex-col gap-3 animate-fade-in">
   <div class="flex flex-wrap items-center justify-between gap-2 shrink-0">
     <div class="flex flex-wrap items-center gap-2">
       <button
@@ -431,12 +431,12 @@
     </div>
   </div>
 
-  <div class="flex-1 min-h-0 rounded-xl border border-border bg-surface-2 overflow-hidden flex flex-col">
-    <div class="flex-1 min-h-0 overflow-hidden p-3">
+  <div class="{needsDimensionChoice ? 'min-h-0 overflow-visible' : 'flex-1 min-h-0 overflow-hidden'} rounded-xl border border-border bg-surface-2 flex flex-col">
+    <div class="{needsDimensionChoice ? 'min-h-0 overflow-visible' : 'flex-1 min-h-0 overflow-hidden'} p-3">
       {#if needsDimensionChoice}
-        <div class="h-full rounded-[28px] border border-border bg-gradient-to-br from-surface-0 via-surface-1 to-accent/5 p-5 md:p-6">
-          <div class="grid h-full min-h-0 grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
-            <aside class="rounded-[26px] border border-border bg-surface-0/90 p-5 shadow-sm">
+        <div class="min-h-[calc(100vh-10rem)] rounded-[28px] border border-border bg-gradient-to-br from-surface-0 via-surface-1 to-accent/5 p-5 md:p-6">
+          <div class="grid min-h-0 grid-cols-1 gap-5 xl:grid-cols-[320px_minmax(0,1fr)]">
+            <aside class="rounded-[26px] border border-border bg-surface-0/90 p-5 shadow-sm xl:sticky xl:top-4 xl:self-start">
               <div class="text-[0.72rem] font-mono font-bold uppercase tracking-[0.2em] text-accent-strong">Guided Setup</div>
               <h2 class="mt-3 text-2xl font-display font-bold text-ink">Set up a QLBM simulation one step at a time</h2>
               <p class="mt-2 text-sm leading-relaxed text-ink-muted">
@@ -472,7 +472,7 @@
               </div>
             </aside>
 
-            <section class="flex min-h-0 flex-col rounded-[30px] border-2 border-black bg-white/88 shadow-[0_20px_40px_rgba(10,25,41,0.08)]">
+            <section class="flex min-h-[620px] flex-col rounded-[30px] border-2 border-black bg-white/88 shadow-[0_20px_40px_rgba(10,25,41,0.08)]">
               <div class="border-b border-border px-6 py-5">
                 <div class="text-[0.68rem] font-mono font-bold uppercase tracking-[0.2em] text-accent-strong">
                   Step {stepPosition} of {wizardSteps.length}
@@ -481,7 +481,7 @@
                 <p class="mt-2 text-sm leading-relaxed text-ink-muted">{stepHint}</p>
               </div>
 
-              <div class="flex-1 overflow-auto px-6 py-5">
+              <div class="flex-1 px-6 py-5">
                 {#if activeStep === "dimension"}
                   <div class="grid grid-cols-1 gap-4 md:grid-cols-2">
                     <button

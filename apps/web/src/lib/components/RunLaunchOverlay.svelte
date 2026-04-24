@@ -17,6 +17,11 @@
   $: latestStderr = lastMeaningfulLine(state?.stderrTail);
   $: progressPercent = Math.max(0, Math.min(100, Number(state?.percent ?? 0)));
   $: stageLabel = state?.stage ? String(state.stage).replace(/-/g, " ") : "running";
+  $: stderrLabel = state?.status === "failed" ? "Latest Failure Detail" : "Latest stderr";
+  $: stderrToneClass = state?.status === "failed"
+    ? "border-bad/30 bg-[#35191f] text-[#ffd5db]"
+    : "border-white/8 bg-white/5 text-slate-200";
+  $: stderrHeadingClass = state?.status === "failed" ? "text-[#f4a2ad]" : "text-slate-500";
 </script>
 
 <div class="fixed inset-0 z-[70] flex items-center justify-center bg-slate-950/24 px-4 backdrop-blur-[3px]">
@@ -84,9 +89,9 @@
             {/if}
 
             {#if latestStderr}
-              <div class="mt-3 rounded-xl border border-bad/30 bg-[#35191f] px-3 py-2">
-                <div class="text-[0.58rem] font-mono font-bold uppercase tracking-[0.16em] text-[#f4a2ad]">Latest Error</div>
-                <p class="mt-1.5 text-sm text-[#ffd5db]">{latestStderr}</p>
+              <div class={`mt-3 rounded-xl border px-3 py-2 ${stderrToneClass}`}>
+                <div class={`text-[0.58rem] font-mono font-bold uppercase tracking-[0.16em] ${stderrHeadingClass}`}>{stderrLabel}</div>
+                <p class="mt-1.5 text-sm">{latestStderr}</p>
               </div>
             {/if}
           </div>

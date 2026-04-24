@@ -17,6 +17,8 @@
   $: timestepCount = vtiArtifacts.length;
   $: obstacleCount = geometryArtifacts.length;
   $: resultsDimension = run?.case_data?.dimension || run?.case?.dimension || null;
+  $: failureSummary = run?.failure_summary || (run?.status === "failed" ? run?.progress?.message : "");
+  $: failureHint = run?.failure_hint || "";
 </script>
 
 <div class="grid h-full min-h-0 grid-cols-1 gap-4 animate-fade-in lg:grid-cols-[minmax(300px,360px)_1fr]">
@@ -48,6 +50,16 @@
           {run.status === 'completed' ? 'bg-good' : run.status === 'failed' ? 'bg-bad' : 'bg-warn animate-pulse-dot'}"></span>
         {run.status}
       </span>
+
+      {#if run.status === "failed" && failureSummary}
+        <div class="space-y-2 rounded-lg border border-bad/25 bg-bad-glow p-3 text-bad">
+          <h3 class="text-xs font-display font-bold">Run failed</h3>
+          <p class="text-xs leading-relaxed">{failureSummary}</p>
+          {#if failureHint}
+            <p class="text-xs leading-relaxed text-ink-muted">{failureHint}</p>
+          {/if}
+        </div>
+      {/if}
 
       <!-- Run metadata -->
       <div class="space-y-2">
@@ -135,6 +147,13 @@
         <h3 class="text-xs font-display font-bold text-ink">stdout</h3>
         <CodeBlock code={run.stdout_tail || ""} language="text" label="stdout tail" />
       </div>
+
+      {#if run.stderr_tail}
+        <div class="space-y-2">
+          <h3 class="text-xs font-display font-bold text-ink">stderr</h3>
+          <CodeBlock code={run.stderr_tail || ""} language="text" label="stderr tail" />
+        </div>
+      {/if}
     {/if}
   </section>
 
