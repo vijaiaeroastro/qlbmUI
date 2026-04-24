@@ -1,13 +1,15 @@
+import { nearestPowerOfTwo } from "./powersOfTwo.js";
+
 function clamp(value, minimum, maximum) {
   return Math.min(Math.max(value, minimum), maximum);
 }
 
 function latticeDimensionBlock(caseData) {
   if (caseData.dimension === "3D") {
-    return `"dim": {"x": ${Number(caseData.grid.x) || 8}, "y": ${Number(caseData.grid.y) || 8}, "z": ${Number(caseData.grid.z) || 8}}`;
+    return `"dim": {"x": ${nearestPowerOfTwo(caseData.grid.x || 8)}, "y": ${nearestPowerOfTwo(caseData.grid.y || 8)}, "z": ${nearestPowerOfTwo(caseData.grid.z || 8)}}`;
   }
 
-  return `"dim": {"x": ${Number(caseData.grid.x) || 8}, "y": ${Number(caseData.grid.y) || 8}}`;
+  return `"dim": {"x": ${nearestPowerOfTwo(caseData.grid.x || 8)}, "y": ${nearestPowerOfTwo(caseData.grid.y || 8)}}`;
 }
 
 function latticeVelocityBlock(caseData) {

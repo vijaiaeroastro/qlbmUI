@@ -1,4 +1,6 @@
 <script>
+  import { powerOptions } from "../domain/powersOfTwo.js";
+
   export let caseData;
   export let onFieldChange;
   export let onGridChange;
@@ -10,6 +12,7 @@
   export let onClose;
 
   const directionOptions = ["N", "S", "E", "W", "NE", "NW", "SE", "SW"];
+  const gridPowerOptions = powerOptions();
 
   $: visibleAxes = caseData.dimension === "3D" ? ["x", "y", "z"] : ["x", "y"];
   $: is3D = caseData.dimension === "3D";
@@ -120,11 +123,19 @@
                 class="w-full px-3 py-2 rounded-lg border border-border bg-surface-0 text-sm text-ink font-mono focus:outline-none focus:border-accent/40 focus:ring-1 focus:ring-accent/20 transition-colors"
                 type="number"
                 min="2"
+                step="2"
+                list="case-builder-grid-powers"
                 value={caseData.grid[axis]}
                 on:input={(event) => onGridChange(axis, Number(event.currentTarget.value))} />
             </label>
           {/each}
         </div>
+        <datalist id="case-builder-grid-powers">
+          {#each gridPowerOptions as value}
+            <option value={value}></option>
+          {/each}
+        </datalist>
+        <p class="text-xs text-ink-faint">Grid axes snap to powers of two.</p>
       </div>
     </section>
 

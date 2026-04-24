@@ -11,6 +11,7 @@
   import { decodeConnectionCode } from "./lib/domain/connection.js";
   import { createDefaultCase } from "./lib/domain/defaultCase.js";
   import { helperVersionNotice as buildHelperVersionNotice } from "./lib/domain/helperVersion.js";
+  import { nearestPowerOfTwo } from "./lib/domain/powersOfTwo.js";
   import { generateQlBmScript } from "./lib/domain/scriptGenerator.js";
   import { artifactUrl, checkHealth, createRun, deleteAllRuns, deleteRun, deleteRuns, getRun, listArtifacts, listRuns, normalizeBaseUrl } from "./lib/api/helperClient.js";
 
@@ -178,10 +179,10 @@
     nextCase.name = (config.name || "").trim() || nextCase.name;
     nextCase.notes = (config.notes || "").trim() || "";
     nextCase.grid = {
-      x: coercePositiveInt(gridConfig.x, nextCase.grid.x, 2),
-      y: coercePositiveInt(gridConfig.y, nextCase.grid.y, 2),
+      x: nearestPowerOfTwo(gridConfig.x ?? nextCase.grid.x),
+      y: nearestPowerOfTwo(gridConfig.y ?? nextCase.grid.y),
       z: dimension === "3D"
-        ? coercePositiveInt(gridConfig.z, nextCase.grid.z, 2)
+        ? nearestPowerOfTwo(gridConfig.z ?? nextCase.grid.z)
         : nextCase.grid.z
     };
 
@@ -492,7 +493,7 @@
       ...caseData,
       grid: {
         ...caseData.grid,
-        [axis]: value
+        [axis]: nearestPowerOfTwo(value)
       }
     };
   }

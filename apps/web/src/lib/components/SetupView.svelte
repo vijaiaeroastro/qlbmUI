@@ -1,6 +1,7 @@
 <script>
   import QlbmEmbeddedViewer from "./QlbmEmbeddedViewer.svelte";
   import CodeBlock from "./CodeBlock.svelte";
+  import { nearestPowerOfTwo, powerOptions } from "../domain/powersOfTwo.js";
 
   export let caseData;
   export let selectedTab = "preview";
@@ -29,6 +30,7 @@
     execution: "Execution",
     review: "Visualize"
   };
+  const gridPowerOptions = powerOptions();
 
   function createWizardState(dimension = "2D") {
     return {
@@ -304,12 +306,11 @@
   }
 
   function updateWizardGrid(axis, value) {
-    const numeric = Math.max(2, Number(value) || 2);
     wizard = {
       ...wizard,
       grid: {
         ...wizard.grid,
-        [axis]: numeric
+        [axis]: nearestPowerOfTwo(value)
       }
     };
   }
@@ -559,6 +560,8 @@
                             class="w-full rounded-2xl border border-border bg-surface-0 px-4 py-3 text-base font-mono text-ink focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/10"
                             type="number"
                             min="2"
+                            step="2"
+                            list="wizard-grid-powers"
                             value={wizard.grid.x}
                             on:input={(event) => updateWizardGrid("x", event.currentTarget.value)} />
                         </label>
@@ -569,6 +572,8 @@
                             class="w-full rounded-2xl border border-border bg-surface-0 px-4 py-3 text-base font-mono text-ink focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/10"
                             type="number"
                             min="2"
+                            step="2"
+                            list="wizard-grid-powers"
                             value={wizard.grid.y}
                             on:input={(event) => updateWizardGrid("y", event.currentTarget.value)} />
                         </label>
@@ -580,11 +585,18 @@
                               class="w-full rounded-2xl border border-border bg-surface-0 px-4 py-3 text-base font-mono text-ink focus:border-accent/40 focus:outline-none focus:ring-2 focus:ring-accent/10"
                               type="number"
                               min="2"
+                              step="2"
+                              list="wizard-grid-powers"
                               value={wizard.grid.z}
                               on:input={(event) => updateWizardGrid("z", event.currentTarget.value)} />
                           </label>
                         {/if}
                       </div>
+                      <datalist id="wizard-grid-powers">
+                        {#each gridPowerOptions as value}
+                          <option value={value}></option>
+                        {/each}
+                      </datalist>
                     </div>
 
                     <div class="rounded-[24px] border border-border bg-surface-0/95 p-4 shadow-sm">
